@@ -157,6 +157,68 @@ describe("GraphMeetingSource", () => {
     expect(meetings[0]?.start).toBe("2026-05-22T10:00:00.000Z");
   });
 
+  it("ignores series master events from calendar view results", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          value: [
+            {
+              id: "series-master",
+              changeKey: "master-1",
+              subject: "Weekly Sync",
+              type: "seriesMaster",
+              recurrence: {},
+              start: {
+                dateTime: "2026-05-22T10:00:00.0000000",
+                timeZone: "UTC",
+              },
+              end: {
+                dateTime: "2026-05-22T11:00:00.0000000",
+                timeZone: "UTC",
+              },
+            },
+            {
+              id: "occ-1",
+              changeKey: "occ-1",
+              subject: "Weekly Sync",
+              type: "occurrence",
+              start: {
+                dateTime: "2026-05-22T10:00:00.0000000",
+                timeZone: "UTC",
+              },
+              end: {
+                dateTime: "2026-05-22T11:00:00.0000000",
+                timeZone: "UTC",
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const meetings = await source.listMeetings({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    expect(meetings.map((meeting) => meeting.id)).toEqual(["occ-1"]);
+  });
+
   it("extracts a Teams link from the event body when onlineMeeting is unavailable", () => {
     const meeting = normalizeGraphEvent(
       {
@@ -204,5 +266,338 @@ describe("GraphMeetingSource", () => {
 
     expect(meeting.start).toBe("2026-05-23T15:00:00.000Z");
     expect(meeting.end).toBe("2026-05-23T16:00:00.000Z");
+  });
+
+  it("follows paginated calendar view delta responses and returns the final delta link", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "evt-1",
+                changeKey: "ck-1",
+                subject: "Planning",
+                start: {
+                  dateTime: "2026-05-22T10:00:00.0000000",
+                  timeZone: "UTC",
+                },
+                end: {
+                  dateTime: "2026-05-22T11:00:00.0000000",
+                  timeZone: "UTC",
+                },
+              },
+            ],
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$skiptoken=page-2",
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "evt-2",
+                changeKey: "ck-2",
+                subject: "Review",
+                start: {
+                  dateTime: "2026-05-22T12:00:00.0000000",
+                  timeZone: "UTC",
+                },
+                end: {
+                  dateTime: "2026-05-22T13:00:00.0000000",
+                  timeZone: "UTC",
+                },
+              },
+            ],
+            "@odata.deltaLink": "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$deltatoken=done",
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const result = await source.listMeetingChanges({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [firstRequestUrl, firstRequestInit] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(String(firstRequestUrl)).toContain("/calendarView/delta");
+    expect(String(firstRequestUrl)).not.toContain("%24orderby");
+    expect(String(firstRequestUrl)).not.toContain("%24top");
+    expect(firstRequestInit).toEqual({
+      headers: {
+        Authorization: "Bearer token-123",
+        Accept: "application/json",
+        Prefer: 'outlook.timezone="UTC", odata.maxpagesize=100',
+      },
+    });
+    expect(result.meetings.map((meeting) => meeting.id)).toEqual(["evt-1", "evt-2"]);
+    expect(result.deltaLink).toBe(
+      "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$deltatoken=done",
+    );
+  });
+
+  it("fails fast when a delta response includes removed events", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          value: [
+            {
+              id: "evt-removed",
+              "@removed": {
+                reason: "deleted",
+              },
+            },
+          ],
+          "@odata.deltaLink": "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$deltatoken=done",
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    await expect(
+      source.listMeetingChanges({
+        calendar: CALENDAR,
+        window: {
+          start: "2026-05-22T00:00:00.000Z",
+          end: "2026-05-23T00:00:00.000Z",
+        },
+      }),
+    ).rejects.toThrowError("Graph delta query returned removed events, which Nolendar does not handle yet.");
+  });
+
+  it("hydrates partial delta events before normalizing them", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "evt-4",
+                subject: "Hydrate me",
+              },
+            ],
+            "@odata.deltaLink": "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$deltatoken=done",
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "evt-4",
+            changeKey: "ck-4",
+            subject: "Hydrate me",
+            start: {
+              dateTime: "2026-05-22T14:00:00.0000000",
+              timeZone: "UTC",
+            },
+            end: {
+              dateTime: "2026-05-22T15:00:00.0000000",
+              timeZone: "UTC",
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const result = await source.listMeetingChanges({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [hydrationUrl] = fetchMock.mock.calls[1] as unknown as [URL, RequestInit];
+    expect(String(hydrationUrl)).toContain("/me/calendars/primary/events/evt-4");
+    expect(result.meetings[0]?.changeKey).toBe("ck-4");
+    expect(result.meetings[0]?.start).toBe("2026-05-22T14:00:00.000Z");
+  });
+
+  it("ignores series master events from delta results", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          value: [
+            {
+              id: "series-master",
+              changeKey: "master-1",
+              subject: "Weekly Sync",
+              type: "seriesMaster",
+              recurrence: {},
+              start: {
+                dateTime: "2026-05-22T10:00:00.0000000",
+                timeZone: "UTC",
+              },
+              end: {
+                dateTime: "2026-05-22T11:00:00.0000000",
+                timeZone: "UTC",
+              },
+            },
+            {
+              id: "occ-1",
+              changeKey: "occ-1",
+              subject: "Weekly Sync",
+              type: "occurrence",
+              start: {
+                dateTime: "2026-05-22T10:00:00.0000000",
+                timeZone: "UTC",
+              },
+              end: {
+                dateTime: "2026-05-22T11:00:00.0000000",
+                timeZone: "UTC",
+              },
+            },
+          ],
+          "@odata.deltaLink": "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$deltatoken=done",
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const result = await source.listMeetingChanges({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    expect(result.meetings.map((meeting) => meeting.id)).toEqual(["occ-1"]);
+  });
+
+  it("retries throttled Graph requests using Retry-After", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "ApplicationThrottled",
+              message: "Application is over its MailboxConcurrency limit.",
+            },
+          }),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": "1",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "evt-5",
+                changeKey: "ck-5",
+                subject: "Retried",
+                start: {
+                  dateTime: "2026-05-22T16:00:00.0000000",
+                  timeZone: "UTC",
+                },
+                end: {
+                  dateTime: "2026-05-22T17:00:00.0000000",
+                  timeZone: "UTC",
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const pending = source.listMeetings({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const meetings = await pending;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(meetings[0]?.id).toBe("evt-5");
+    vi.useRealTimers();
   });
 });

@@ -368,28 +368,71 @@ Approach:
 - Do not advance delta state if sync is incomplete
 - Support `--dry-run` for safe verification
 
-## Release Plan
+## Revised Milestones
 
-### Milestone 1
+### Milestone 1: Foundation
 
 - Project scaffold
 - Config loader
-- `list` command
+- CLI entrypoint
+- `list` command stub
 
-### Milestone 2
+Status:
+- Complete
+
+### Milestone 2: Graph Listing
+
+- Microsoft Graph authentication
+- Live meeting listing
+- Multi-calendar aggregation
+- Lookahead window handling
+
+Status:
+- Complete
+
+### Milestone 3: Idempotent Notion Sync
 
 - Notion schema validation
 - Initial sync with idempotent create/update
+- Tags, assignee, event URL, participant relations
+- Rich page body content and force-update support
 
-### Milestone 3
+Status:
+- Complete
 
-- Incremental sync with delta queries
+### Milestone 4: Incremental Sync
+
+- Calendar-view delta queries
 - Local sync state persistence
+- Safe state advancement only after successful sync
 
-### Milestone 4
+Status:
+- In progress
 
-- Recurring meeting correctness
-- Filters and template support
+Current scope:
+- `sync` now uses Microsoft Graph calendar-view delta queries
+- delta links are stored per calendar in `.nolendar/state.json`
+- stored delta links are only reused when the saved window matches the current resolved window exactly
+- removed/deleted delta events currently fail the sync instead of being applied
+
+### Milestone 5: Recurrence and Deletion Hardening
+
+- Correct handling for recurring series and exceptions
+- Deleted event handling
+- Cancelled event behavior
+
+Status:
+- Not started
+
+### Milestone 6: Remaining Product Features
+
+- Template-based page creation
+- Remaining filter behavior for `ignorePersonal` and `ignoreOptionalAttendance`
+- Optional MCP-based Notion integration
+- Auth/token-cache hardening and helper commands
+
+Status:
+- Not started
 
 ## Open Decisions
 

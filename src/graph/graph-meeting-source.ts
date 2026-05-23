@@ -5,6 +5,7 @@ import type { CalendarWindow, MeetingSource } from "../list.js";
 import type { AccessTokenProvider } from "./device-code-token-provider.js";
 
 const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
+const MAX_THROTTLE_RETRIES = 3;
 
 export class GraphMeetingSource implements MeetingSource {
   constructor(
@@ -14,51 +15,183 @@ export class GraphMeetingSource implements MeetingSource {
 
   async listMeetings(args: { calendar: CalendarConfig; window: CalendarWindow }): Promise<Meeting[]> {
     const accessToken = await this.accessTokenProvider.getAccessToken();
-    const url = new URL(`${GRAPH_BASE_URL}/me/calendars/${encodeURIComponent(args.calendar.id)}/calendarView`);
-    url.searchParams.set("startDateTime", args.window.start);
-    url.searchParams.set("endDateTime", args.window.end);
-    url.searchParams.set(
-      "$select",
-      [
-        "id",
-        "changeKey",
-        "subject",
-        "start",
-        "end",
-        "organizer",
-        "attendees",
-        "onlineMeeting",
-        "onlineMeetingUrl",
-        "webLink",
-        "bodyPreview",
-        "body",
-        "responseStatus",
-        "type",
-        "isCancelled",
-        "recurrence",
-      ].join(","),
-    );
-    url.searchParams.set("$top", "100");
-    url.searchParams.set("$orderby", "start/dateTime");
+    const payload = await fetchGraphPayload(this.fetchImpl, buildCalendarViewUrl(args.calendar.id, args.window), accessToken);
 
-    const response = await this.fetchImpl(url, {
+    return (payload.value ?? [])
+      .filter(isSyncableCalendarViewEvent)
+      .map((event) => normalizeGraphEvent(event, args.calendar));
+  }
+
+  async listMeetingChanges(args: {
+    calendar: CalendarConfig;
+    window: CalendarWindow;
+    deltaLink?: string;
+  }): Promise<{ meetings: Meeting[]; deltaLink?: string }> {
+    const accessToken = await this.accessTokenProvider.getAccessToken();
+    let nextUrl: URL | undefined = args.deltaLink
+      ? new URL(args.deltaLink)
+      : buildCalendarViewDeltaUrl(args.calendar.id, args.window);
+    const meetings: Meeting[] = [];
+    let deltaLink: string | undefined;
+
+    while (nextUrl) {
+      const payload = await fetchGraphPayload(this.fetchImpl, nextUrl, accessToken, {
+        maxPageSize: 100,
+      });
+      const events = payload.value ?? [];
+
+      if (events.some((event) => event["@removed"] != null)) {
+        throw new Error("Graph delta query returned removed events, which Nolendar does not handle yet.");
+      }
+
+      for (const event of events) {
+        if (!isSyncableCalendarViewEvent(event)) {
+          continue;
+        }
+
+        const hydratedEvent = await this.hydrateGraphEvent(args.calendar.id, event, accessToken);
+        meetings.push(normalizeGraphEvent(hydratedEvent, args.calendar));
+      }
+      nextUrl = payload["@odata.nextLink"] ? new URL(payload["@odata.nextLink"]) : undefined;
+      deltaLink = payload["@odata.deltaLink"] ?? deltaLink;
+    }
+
+    return {
+      meetings,
+      deltaLink,
+    };
+  }
+
+  private async hydrateGraphEvent(calendarId: string, event: GraphEvent, accessToken: string): Promise<GraphEvent> {
+    if (!needsHydration(event)) {
+      return event;
+    }
+
+    const eventId = required(event.id, "Graph delta event is missing `id`.");
+    const payload = await fetchGraphPayload(
+      this.fetchImpl,
+      buildEventUrl(calendarId, eventId),
+      accessToken,
+    );
+    const hydratedEvent = payload.value?.[0] ?? payload;
+
+    return {
+      ...event,
+      ...hydratedEvent,
+    } as GraphEvent;
+  }
+}
+
+function buildCalendarViewUrl(calendarId: string, window: CalendarWindow): URL {
+  const url = new URL(`${GRAPH_BASE_URL}/me/calendars/${encodeURIComponent(calendarId)}/calendarView`);
+  url.searchParams.set("startDateTime", window.start);
+  url.searchParams.set("endDateTime", window.end);
+  url.searchParams.set("$select", graphEventSelect());
+  url.searchParams.set("$top", "100");
+  url.searchParams.set("$orderby", "start/dateTime");
+  return url;
+}
+
+function buildCalendarViewDeltaUrl(calendarId: string, window: CalendarWindow): URL {
+  const url = new URL(`${GRAPH_BASE_URL}/me/calendars/${encodeURIComponent(calendarId)}/calendarView/delta`);
+  url.searchParams.set("startDateTime", window.start);
+  url.searchParams.set("endDateTime", window.end);
+  url.searchParams.set("$select", graphEventSelect());
+  return url;
+}
+
+function buildEventUrl(calendarId: string, eventId: string): URL {
+  const url = new URL(`${GRAPH_BASE_URL}/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
+  url.searchParams.set("$select", graphEventSelect());
+  return url;
+}
+
+async function fetchGraphPayload(
+  fetchImpl: typeof fetch,
+  url: URL,
+  accessToken: string,
+  options: {
+    maxPageSize?: number;
+  } = {},
+): Promise<{ value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string }> {
+  const preferHeaders = ['outlook.timezone="UTC"'];
+
+  if (options.maxPageSize !== undefined) {
+    preferHeaders.push(`odata.maxpagesize=${options.maxPageSize}`);
+  }
+
+  for (let attempt = 0; attempt <= MAX_THROTTLE_RETRIES; attempt += 1) {
+    const response = await fetchImpl(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
-        Prefer: 'outlook.timezone="UTC"',
+        Prefer: preferHeaders.join(", "),
       },
     });
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Graph request failed with ${response.status}: ${body}`);
+    if (response.ok) {
+      return (await response.json()) as { value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string };
     }
 
-    const payload = (await response.json()) as { value?: GraphEvent[] };
-    const events = payload.value ?? [];
+    if (response.status === 429 && attempt < MAX_THROTTLE_RETRIES) {
+      const retryAfterMs = getRetryDelayMs(response, attempt);
+      await sleep(retryAfterMs);
+      continue;
+    }
 
-    return events.map((event) => normalizeGraphEvent(event, args.calendar));
+    const body = await response.text();
+    throw new Error(`Graph request failed with ${response.status}: ${body}`);
   }
+
+  throw new Error("Graph request failed after retries.");
+}
+
+function getRetryDelayMs(response: Response, attempt: number): number {
+  const retryAfter = response.headers.get("Retry-After");
+
+  if (retryAfter) {
+    const parsedSeconds = Number.parseInt(retryAfter, 10);
+    if (Number.isFinite(parsedSeconds) && parsedSeconds >= 0) {
+      return parsedSeconds * 1000;
+    }
+  }
+
+  return (attempt + 1) * 1000;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function needsHydration(event: GraphEvent): boolean {
+  return !event.changeKey || !event.start?.dateTime || !event.end?.dateTime;
+}
+
+function isSyncableCalendarViewEvent(event: GraphEvent): boolean {
+  return event.type !== "seriesMaster";
+}
+
+function graphEventSelect(): string {
+  return [
+    "id",
+    "changeKey",
+    "subject",
+    "start",
+    "end",
+    "organizer",
+    "attendees",
+    "onlineMeeting",
+    "onlineMeetingUrl",
+    "webLink",
+    "bodyPreview",
+    "body",
+    "responseStatus",
+    "type",
+    "isCancelled",
+    "recurrence",
+  ].join(",");
 }
 
 export function normalizeGraphEvent(event: GraphEvent, calendar: CalendarConfig): Meeting {

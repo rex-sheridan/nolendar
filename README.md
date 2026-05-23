@@ -2,7 +2,7 @@
 
 Nolendar reads upcoming meetings from Outlook Calendar via Microsoft Graph and turns them into structured Notion tasks/pages for meeting notes, action items, and related context.
 
-The project is currently in early development. Milestone 3 is complete: Nolendar can load YAML config, authenticate to Microsoft Graph, validate a target Notion data source, and perform an idempotent initial sync that creates or updates meeting pages without duplicating them.
+The project is currently in early development. The foundation, Graph listing, and idempotent Notion sync milestones are complete. Incremental sync is now in progress: `sync` uses Microsoft Graph delta queries and persists per-calendar delta state locally.
 
 ## Current Status
 
@@ -23,6 +23,8 @@ Implemented now:
 - Notion schema validation for required properties
 - Optional creation of missing required Notion properties
 - Idempotent initial sync using Outlook event ID and `changeKey`
+- Incremental sync using Microsoft Graph calendar-view delta queries
+- Local sync state persistence in `.nolendar/state.json`
 - Sync filtering for:
   - declined meetings
   - minimum meeting duration
@@ -36,9 +38,10 @@ Implemented now:
 
 Planned next:
 
-- Delta-query incremental sync
 - Recurring meeting sync hardening
+- Deleted event handling for delta sync
 - Template-based page creation
+- Remaining filter support for `ignorePersonal` and `ignoreOptionalAttendance`
 
 ## Planned Features
 
@@ -634,6 +637,13 @@ Force-update already-synced pages even when the stored Outlook `changeKey` match
 npm run dev -- sync --config nolendar.yml --force-update
 ```
 
+Incremental sync notes:
+
+- `sync` now persists per-calendar delta links under `sync.statePath`
+- stored delta links are only reused when the saved calendar window exactly matches the current resolved window
+- in practice, `today` benefits the most because repeated runs on the same UTC day resolve to the same window
+- if the window changes, Nolendar falls back to a fresh calendar-view delta bootstrap for that calendar
+
 Or build the project and run the compiled CLI:
 
 ```bash
@@ -652,7 +662,7 @@ node dist/index.js list --config nolendar.yml --lookahead 7d
 - `print-notion-schema`
   - Prints the detected meeting data source schema and, when configured, the People data source schema
 - `sync`
-  - Lists meetings for the requested window and creates, updates, or skips Notion pages based on idempotency checks
+  - Fetches meeting changes for the requested window and creates, updates, or skips Notion pages based on idempotency checks
 - `init`
   - Writes a starter `nolendar.yml` config file
 
@@ -687,13 +697,14 @@ The current sync implementation:
 - skips updates when the stored `changeKey` matches unless `--force-update` is used
 - updates existing pages when the `changeKey` differs
 - creates new pages when no matching event ID is found
+- persists delta state only after a successful non-dry-run sync
 
 ### Current Sync Limitations
 
 Not implemented yet:
 
-- delta-query incremental sync
 - recurring meeting edge-case hardening
+- deleted event handling for Graph delta sync
 - template-page cloning
 - filters for `ignorePersonal` and `ignoreOptionalAttendance`
 - MCP-based Notion integration
@@ -750,3 +761,4 @@ Current completed milestones:
 - Milestone 1: project scaffold, config loading, basic CLI
 - Milestone 2: Microsoft Graph meeting listing
 - Milestone 3: Notion schema validation and idempotent initial sync
+- Milestone 4: incremental sync with Graph delta queries and local state persistence is in progress

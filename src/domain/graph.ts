@@ -40,4 +40,7 @@ export interface GraphEvent {
   type?: string | null;
   isCancelled?: boolean | null;
   recurrence?: object | null;
+  "@removed"?: {
+    reason?: string | null;
+  } | null;
 }

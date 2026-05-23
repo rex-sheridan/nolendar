@@ -17,7 +17,7 @@ import { resolveNotionAuthToken } from "./notion/auth.js";
 import { ApiNotionClient } from "./notion/api-notion-client.js";
 import { validateNotionSchema } from "./notion/schema.js";
 import { validateOrEnsureNotionSchema } from "./notion/validation.js";
-import { syncMeetingsToNotion } from "./sync.js";
+import { syncCalendarChangesToNotion } from "./delta-sync.js";
 
 export interface CliDependencies {
   stdout: Pick<Console, "log">;
@@ -132,12 +132,24 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
       const meetingSource = buildGraphMeetingSource(config, deps);
       const notion = buildNotionClientFn();
-      const meetingsResult = await listMeetings(config, lookahead, { meetingSource });
-      const syncResult = await syncMeetingsToNotion(config, meetingsResult.meetings, notion, {
-        dryRun: options.dryRun,
-        ensureProperties: options.ensureProperties,
-        forceUpdate: options.forceUpdate,
-      });
+      const syncResult = await syncCalendarChangesToNotion(
+        {
+          ...config,
+          sync: {
+            ...config.sync,
+            lookahead,
+          },
+        },
+        notion,
+        {
+          meetingSource,
+          syncOptions: {
+            dryRun: options.dryRun,
+            ensureProperties: options.ensureProperties,
+            forceUpdate: options.forceUpdate,
+          },
+        },
+      );
 
       deps.stdout.log(
         `Sync summary: created=${syncResult.created}, updated=${syncResult.updated}, skipped=${syncResult.skipped}, filtered=${syncResult.filtered}, dryRun=${syncResult.dryRun}`,
