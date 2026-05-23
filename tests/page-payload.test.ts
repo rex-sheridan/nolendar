@@ -12,6 +12,7 @@ const CONFIG: NolendarConfig = {
   notion: {
     databaseId: "data-source-id",
     defaultTags: ["meeting", "outlook"],
+    defaultAssigneeEmail: "me@example.com",
   },
   calendars: [
     {
@@ -31,6 +32,7 @@ const CONFIG: NolendarConfig = {
     changeKey: "Outlook ChangeKey",
     eventLink: "Source URL",
     tags: "Tags",
+    assignee: "Assignee",
   },
   sync: {
     lookahead: "today",
@@ -66,9 +68,13 @@ describe("buildMeetingProperties", () => {
           "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
           "Source URL": { id: "source-url", name: "Source URL", type: "url" },
           Tags: { id: "tags", name: "Tags", type: "multi_select" },
+          Assignee: { id: "assignee", name: "Assignee", type: "people" },
         },
       },
       MEETING,
+      {
+        assigneeUserId: "user-123",
+      },
     );
 
     expect(properties["Source URL"]).toEqual({
@@ -76,6 +82,9 @@ describe("buildMeetingProperties", () => {
     });
     expect(properties.Tags).toEqual({
       multi_select: [{ name: "meeting" }, { name: "outlook" }],
+    });
+    expect(properties.Assignee).toEqual({
+      people: [{ id: "user-123" }],
     });
   });
 

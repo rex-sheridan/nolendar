@@ -1,4 +1,12 @@
-export type NotionPropertyType = "title" | "date" | "rich_text" | "url" | "status" | "multi_select" | string;
+export type NotionPropertyType =
+  | "title"
+  | "date"
+  | "rich_text"
+  | "url"
+  | "status"
+  | "multi_select"
+  | "people"
+  | string;
 
 export interface NotionDataSourceProperty {
   id: string;
@@ -20,5 +28,5 @@ export interface NotionPageRecord {
 
 export interface RequiredNotionProperty {
   name: string;
-  type: "title" | "date" | "rich_text" | "url" | "multi_select";
+  type: "title" | "date" | "rich_text" | "url" | "multi_select" | "people";
 }

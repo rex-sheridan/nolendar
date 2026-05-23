@@ -18,10 +18,15 @@ interface NotionSdkClient {
     create(args: Record<string, unknown>): Promise<unknown>;
     update(args: Record<string, unknown>): Promise<unknown>;
   };
+  users: {
+    me(): Promise<unknown>;
+    list(args?: { start_cursor?: string; page_size?: number }): Promise<unknown>;
+  };
 }
 
 export class ApiNotionClient implements NotionClient {
   private readonly client: NotionSdkClient;
+  private readonly defaultAssigneeCache = new Map<string, string | undefined>();
 
   constructor(authToken: string, client?: NotionSdkClient) {
     this.client =
@@ -46,6 +51,45 @@ export class ApiNotionClient implements NotionClient {
       title: response.title?.map((entry) => entry.plain_text ?? "").join(""),
       properties: normalizeProperties(response.properties),
     };
+  }
+
+  async getDefaultAssigneeUserId(defaultAssigneeEmail?: string): Promise<string | undefined> {
+    const cacheKey = defaultAssigneeEmail?.trim().toLowerCase() ?? "__self__";
+
+    if (this.defaultAssigneeCache.has(cacheKey)) {
+      return this.defaultAssigneeCache.get(cacheKey);
+    }
+
+    if (defaultAssigneeEmail) {
+      const matchedUserId = await this.findUserIdByEmail(defaultAssigneeEmail);
+      if (matchedUserId) {
+        this.defaultAssigneeCache.set(cacheKey, matchedUserId);
+        return matchedUserId;
+      }
+    }
+
+    const response = (await this.client.users.me()) as {
+      id?: string;
+      type?: string;
+      bot?: {
+        owner?: {
+          type?: string;
+          user?: {
+            id?: string;
+          };
+        };
+      };
+    };
+
+    const resolvedUserId =
+      response.type === "person"
+        ? response.id
+        : response.bot?.owner?.type === "user"
+          ? response.bot.owner.user?.id
+          : undefined;
+
+    this.defaultAssigneeCache.set(cacheKey, resolvedUserId);
+    return resolvedUserId;
   }
 
   async ensureProperties(dataSourceId: string, properties: RequiredNotionProperty[]): Promise<void> {
@@ -107,11 +151,16 @@ export class ApiNotionClient implements NotionClient {
     dataSource: NotionDataSourceSchema;
     meeting: Meeting;
   }): Promise<{ id: string }> {
+    const assigneeUserId = args.config.mapping.assignee
+      ? await this.getDefaultAssigneeUserId(args.config.notion.defaultAssigneeEmail)
+      : undefined;
     const response = (await this.client.pages.create({
       parent: {
         data_source_id: args.dataSource.id,
       },
-      properties: buildMeetingProperties(args.config, args.dataSource, args.meeting),
+      properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
+        assigneeUserId,
+      }),
       children: buildMeetingChildren(args.meeting),
     })) as { id?: string };
 
@@ -126,10 +175,49 @@ export class ApiNotionClient implements NotionClient {
     dataSource: NotionDataSourceSchema;
     meeting: Meeting;
   }): Promise<void> {
+    const assigneeUserId = args.config.mapping.assignee
+      ? await this.getDefaultAssigneeUserId(args.config.notion.defaultAssigneeEmail)
+      : undefined;
     await this.client.pages.update({
       page_id: args.pageId,
-      properties: buildMeetingProperties(args.config, args.dataSource, args.meeting),
+      properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
+        assigneeUserId,
+      }),
     });
+  }
+
+  private async findUserIdByEmail(email: string): Promise<string | undefined> {
+    const normalizedEmail = email.trim().toLowerCase();
+    let nextCursor: string | undefined;
+
+    do {
+      const response = (await this.client.users.list({
+        start_cursor: nextCursor,
+        page_size: 100,
+      })) as {
+        results?: Array<{
+          id?: string;
+          type?: string;
+          person?: {
+            email?: string;
+          };
+        }>;
+        next_cursor?: string | null;
+        has_more?: boolean;
+      };
+
+      const match = response.results?.find(
+        (user) => user.type === "person" && user.person?.email?.trim().toLowerCase() === normalizedEmail,
+      );
+
+      if (match?.id) {
+        return match.id;
+      }
+
+      nextCursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+    } while (nextCursor);
+
+    return undefined;
   }
 }
 
@@ -161,6 +249,8 @@ function propertyTypePayload(type: RequiredNotionProperty["type"]): Record<strin
       return { url: {} };
     case "multi_select":
       return { multi_select: { options: [] } };
+    case "people":
+      return { people: {} };
   }
 }
 

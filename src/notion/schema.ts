@@ -44,7 +44,14 @@ export function buildRequiredNotionProperties(config: NolendarConfig): RequiredN
     required.push({
       name: config.mapping.tags,
       type: "multi_select",
-    } as RequiredNotionProperty);
+    });
+  }
+
+  if (config.mapping.assignee) {
+    required.push({
+      name: config.mapping.assignee,
+      type: "people",
+    });
   }
 
   return required;

@@ -92,11 +92,16 @@ function normalizeNotion(value: unknown): NotionConfig {
   const databaseId = requireString(record.databaseId, "`notion.databaseId` is required.");
   const templatePageId = optionalString(record.templatePageId, "`notion.templatePageId` must be a string.");
   const defaultTags = optionalStringArray(record.defaultTags, "`notion.defaultTags` must be an array of strings.");
+  const defaultAssigneeEmail = optionalString(
+    record.defaultAssigneeEmail,
+    "`notion.defaultAssigneeEmail` must be a string.",
+  );
 
   return {
     databaseId,
     templatePageId,
     defaultTags,
+    defaultAssigneeEmail,
   };
 }
 
@@ -149,6 +154,7 @@ function normalizeMapping(value: unknown): MappingConfig {
     changeKey: optionalStringWithDefault(record.changeKey, "Outlook ChangeKey", "`mapping.changeKey` must be a string."),
     eventLink: optionalString(record.eventLink, "`mapping.eventLink` must be a string."),
     tags: optionalString(record.tags, "`mapping.tags` must be a string."),
+    assignee: optionalString(record.assignee, "`mapping.assignee` must be a string."),
   };
 }
 

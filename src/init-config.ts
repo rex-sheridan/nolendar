@@ -9,6 +9,7 @@ notion:
   databaseId: your_notion_data_source_id
   defaultTags:
     - meeting
+  defaultAssigneeEmail: you@example.com
 
 calendars:
   - id: primary
@@ -28,6 +29,7 @@ mapping:
   changeKey: Outlook ChangeKey
   eventLink: Source URL
   tags: Tags
+  assignee: Assignee
 
 sync:
   lookahead: today

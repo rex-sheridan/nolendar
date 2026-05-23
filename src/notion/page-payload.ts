@@ -6,6 +6,9 @@ export function buildMeetingProperties(
   config: NolendarConfig,
   dataSource: NotionDataSourceSchema,
   meeting: Meeting,
+  options: {
+    assigneeUserId?: string;
+  } = {},
 ): Record<string, unknown> {
   const properties: Record<string, unknown> = {
     [config.mapping.title]: {
@@ -32,6 +35,7 @@ export function buildMeetingProperties(
   maybeSetUrl(properties, dataSource, "Event Link", meeting.eventLink);
   maybeSetConfiguredUrl(properties, dataSource, config.mapping.eventLink, meeting.eventLink);
   maybeSetTags(properties, dataSource, config.mapping.tags, config.notion.defaultTags);
+  maybeSetAssignee(properties, dataSource, config.mapping.assignee, options.assigneeUserId);
 
   return properties;
 }
@@ -117,6 +121,21 @@ function maybeSetTags(
 
   properties[propertyName] = {
     multi_select: tags.map((tag) => ({ name: tag })),
+  };
+}
+
+function maybeSetAssignee(
+  properties: Record<string, unknown>,
+  dataSource: NotionDataSourceSchema,
+  propertyName: string | undefined,
+  userId?: string,
+): void {
+  if (!propertyName || !userId || dataSource.properties[propertyName]?.type !== "people") {
+    return;
+  }
+
+  properties[propertyName] = {
+    people: [{ id: userId }],
   };
 }
 

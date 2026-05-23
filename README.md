@@ -65,6 +65,7 @@ Planned next:
 - Meeting link
 - Source URL
 - Tags
+- Assignee
 - Status
 - Notes
 - Action items
@@ -112,6 +113,7 @@ notion:
   defaultTags:
     - meeting
     - notes
+  defaultAssigneeEmail: you@example.com
 
 calendars:
   - id: primary
@@ -133,6 +135,7 @@ mapping:
   changeKey: Outlook ChangeKey
   eventLink: Source URL
   tags: Tags
+  assignee: Assignee
 
 sync:
   lookahead: today
@@ -148,6 +151,7 @@ sync:
   - `auth_code`
 - `notion.databaseId` is required
 - `notion.defaultTags` can be used to apply static tags to each created Notion page
+- `notion.defaultAssigneeEmail` can be used to resolve a Notion user by email for the configured assignee property
 - with the current Notion API model, this value should be the target data source ID used for row queries and page creation
 - `calendars` must contain at least one calendar
 - `sync.lookahead` defaults to `today`
@@ -166,6 +170,7 @@ sync:
 - optional mapping fields:
   - `mapping.eventLink` for a Notion `url` property populated from Outlook `webLink`
   - `mapping.tags` for a Notion `multi_select` property populated from `notion.defaultTags`
+  - `mapping.assignee` for a Notion `people` property populated from the authenticated Notion user
 
 ### Required Notion Properties
 
@@ -177,6 +182,7 @@ Nolendar validates the following properties on the target Notion data source:
 - rich text property mapped by `mapping.changeKey`
 - url property mapped by `mapping.eventLink`, if configured
 - multi-select property mapped by `mapping.tags`, if configured and `notion.defaultTags` is non-empty
+- people property mapped by `mapping.assignee`, if configured
 
 If these properties are missing, you can either create them yourself or use `--ensure-properties` with `validate-notion` or `sync`.
 
@@ -190,6 +196,8 @@ Current Notion page creation supports:
 - change key from the Outlook event `changeKey`
 - URL from the Outlook event `webLink` when `mapping.eventLink` is configured
 - tags from `notion.defaultTags` when `mapping.tags` is configured
+- assignee from `notion.defaultAssigneeEmail` when configured and resolvable
+- otherwise assignee from the authenticated Notion identity when `mapping.assignee` is configured
 - meeting body content from the full Outlook event body when available, otherwise `bodyPreview`
 - Teams join link extraction from the Outlook event body when Graph does not return `onlineMeeting.joinUrl`
 
@@ -209,6 +217,7 @@ notion:
   defaultTags:
     - meeting
     - sync
+  defaultAssigneeEmail: you@example.com
 
 mapping:
   title: Name
@@ -217,7 +226,19 @@ mapping:
   changeKey: Outlook ChangeKey
   eventLink: Source URL
   tags: Tags
+  assignee: Assignee
 ```
+
+Assignee resolution precedence:
+
+1. `notion.defaultAssigneeEmail` if set and Nolendar can resolve it to a Notion person user
+2. otherwise the authenticated Notion identity from the current token
+
+Notes:
+
+- email-based resolution requires Notion user information capabilities that expose `person.email`
+- Notion's users API does not support server-side filtering by email, so Nolendar resolves this by listing workspace users and matching client-side
+- if the email cannot be resolved, Nolendar falls back to the authenticated Notion identity
 
 ## Environment Variables
 

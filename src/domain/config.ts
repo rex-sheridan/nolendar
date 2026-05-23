@@ -11,6 +11,7 @@ export interface NotionConfig {
   databaseId: string;
   templatePageId?: string;
   defaultTags?: string[];
+  defaultAssigneeEmail?: string;
 }
 
 export interface CalendarConfig {
@@ -33,6 +34,7 @@ export interface MappingConfig {
   changeKey: string;
   eventLink?: string;
   tags?: string;
+  assignee?: string;
 }
 
 export interface SyncConfig {

@@ -27,6 +27,22 @@ describe("normalizeConfig", () => {
     expect(config.filters.ignoreDeclined).toBe(true);
   });
 
+  it("accepts a default assignee email", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        defaultAssigneeEmail: "me@example.com",
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+    });
+
+    expect(config.notion.defaultAssigneeEmail).toBe("me@example.com");
+  });
+
   it("resolves configured state path relative to config file", () => {
     const config = normalizeConfig(
       {

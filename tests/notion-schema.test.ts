@@ -11,6 +11,7 @@ const CONFIG: NolendarConfig = {
   notion: {
     databaseId: "data-source-id",
     defaultTags: ["meeting"],
+    defaultAssigneeEmail: "me@example.com",
   },
   calendars: [
     {
@@ -30,6 +31,7 @@ const CONFIG: NolendarConfig = {
     changeKey: "Outlook ChangeKey",
     eventLink: "Source URL",
     tags: "Tags",
+    assignee: "Assignee",
   },
   sync: {
     lookahead: "today",
@@ -46,6 +48,7 @@ describe("buildRequiredNotionProperties", () => {
       { name: "Outlook ChangeKey", type: "rich_text" },
       { name: "Source URL", type: "url" },
       { name: "Tags", type: "multi_select" },
+      { name: "Assignee", type: "people" },
     ]);
   });
 });
@@ -62,6 +65,7 @@ describe("validateNotionSchema", () => {
         "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
         "Source URL": { id: "source-url", name: "Source URL", type: "url" },
         Tags: { id: "tags", name: "Tags", type: "multi_select" },
+        Assignee: { id: "assignee", name: "Assignee", type: "people" },
       },
     });
 
@@ -86,6 +90,7 @@ describe("validateNotionSchema", () => {
       { name: "Outlook Event ID", type: "rich_text" },
       { name: "Outlook ChangeKey", type: "rich_text" },
       { name: "Tags", type: "multi_select" },
+      { name: "Assignee", type: "people" },
     ]);
     expect(result.mismatched).toEqual([
       { name: "Name", expectedType: "title", actualType: "rich_text" },
