@@ -204,6 +204,28 @@ describe("GraphMeetingSource", () => {
     expect(meeting.isOptionalForOwner).toBe(true);
   });
 
+  it("treats exception instances as recurring meetings", () => {
+    const meeting = normalizeGraphEvent(
+      {
+        id: "evt-exc",
+        changeKey: "ck-exc",
+        subject: "Weekly Sync - moved",
+        type: "exception",
+        start: {
+          dateTime: "2026-05-22T14:00:00.0000000",
+          timeZone: "UTC",
+        },
+        end: {
+          dateTime: "2026-05-22T15:00:00.0000000",
+          timeZone: "UTC",
+        },
+      },
+      CALENDAR,
+    );
+
+    expect(meeting.isRecurring).toBe(true);
+  });
+
   it("ignores series master events from calendar view results", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(

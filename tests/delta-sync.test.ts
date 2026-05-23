@@ -235,6 +235,57 @@ describe("syncCalendarChangesToNotion", () => {
     expect(saveState).not.toHaveBeenCalled();
   });
 
+  it("adds archive counts from cancelled meetings returned by delta sync", async () => {
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => undefined),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi
+        .fn()
+        .mockResolvedValueOnce({ id: "page-1", eventId: "evt-1", changeKey: "old" })
+        .mockResolvedValueOnce({ id: "page-2", eventId: "evt-removed", changeKey: "old" }),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+    };
+
+    const result = await syncCalendarChangesToNotion(CONFIG, notion, {
+      meetingSource: {
+        listMeetingChanges: vi.fn(async () => ({
+          meetings: [
+            {
+              ...MEETING,
+              isCancelled: true,
+            },
+          ],
+          removedEventIds: ["evt-removed"],
+          deltaLink: "delta-1",
+        })),
+      },
+      loadState: vi.fn(async () => ({
+        version: 1 as const,
+        calendars: {},
+      })),
+      saveState: vi.fn(async () => undefined),
+      clock: {
+        now: () => new Date("2026-05-23T15:00:00.000Z"),
+      },
+    });
+
+    expect(result.archived).toBe(2);
+    expect(notion.archivePage).toHaveBeenCalledTimes(2);
+  });
+
   it("syncs calendars sequentially instead of in parallel", async () => {
     const order: string[] = [];
     let activeCalls = 0;

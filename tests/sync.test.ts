@@ -233,4 +233,100 @@ describe("syncMeetingsToNotion", () => {
     expect(notion.updateMeetingPage).toHaveBeenCalledTimes(1);
     expect(notion.createMeetingPage).not.toHaveBeenCalled();
   });
+
+  it("archives an existing page for a cancelled meeting instead of updating it", async () => {
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
+          Assignee: { id: "assignee", name: "Assignee", type: "people" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => "user-1"),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => ({ id: "page-1", eventId: "evt-1", changeKey: "old" })),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+    };
+
+    const result = await syncMeetingsToNotion(
+      CONFIG,
+      [
+        {
+          ...MEETING,
+          isCancelled: true,
+        },
+      ],
+      notion,
+    );
+
+    expect(result).toEqual({
+      created: 0,
+      updated: 0,
+      archived: 1,
+      skipped: 0,
+      filtered: 0,
+      dryRun: false,
+    });
+    expect(notion.archivePage).toHaveBeenCalledWith("page-1");
+    expect(notion.createMeetingPage).not.toHaveBeenCalled();
+    expect(notion.updateMeetingPage).not.toHaveBeenCalled();
+  });
+
+  it("does not create a new page for a cancelled meeting that has not been synced before", async () => {
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
+          Assignee: { id: "assignee", name: "Assignee", type: "people" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => "user-1"),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => null),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+    };
+
+    const result = await syncMeetingsToNotion(
+      CONFIG,
+      [
+        {
+          ...MEETING,
+          isCancelled: true,
+        },
+      ],
+      notion,
+    );
+
+    expect(result).toEqual({
+      created: 0,
+      updated: 0,
+      archived: 0,
+      skipped: 1,
+      filtered: 0,
+      dryRun: false,
+    });
+    expect(notion.archivePage).not.toHaveBeenCalled();
+    expect(notion.createMeetingPage).not.toHaveBeenCalled();
+    expect(notion.updateMeetingPage).not.toHaveBeenCalled();
+  });
 });

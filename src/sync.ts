@@ -53,6 +53,11 @@ export async function syncMeetingsToNotion(
     });
 
     if (!existing) {
+      if (meeting.isCancelled) {
+        result.skipped += 1;
+        continue;
+      }
+
       result.created += 1;
       if (!options.dryRun) {
         await notion.createMeetingPage({
@@ -60,6 +65,14 @@ export async function syncMeetingsToNotion(
           dataSource,
           meeting,
         });
+      }
+      continue;
+    }
+
+    if (meeting.isCancelled) {
+      result.archived += 1;
+      if (!options.dryRun) {
+        await notion.archivePage(existing.id);
       }
       continue;
     }

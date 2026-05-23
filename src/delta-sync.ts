@@ -100,7 +100,7 @@ export async function syncCalendarChangesToNotion(
 
   return {
     ...syncResult,
-    archived,
+    archived: syncResult.archived + archived,
   };
 }
 

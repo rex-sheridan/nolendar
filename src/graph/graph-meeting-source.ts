@@ -281,7 +281,11 @@ export function normalizeGraphEvent(
     isOrganizer,
     isOptionalForOwner: determineOptionalAttendance(event, options.currentUserEmail),
     isCancelled: Boolean(event.isCancelled),
-    isRecurring: event.type === "seriesMaster" || event.type === "occurrence" || event.recurrence != null,
+    isRecurring:
+      event.type === "seriesMaster" ||
+      event.type === "occurrence" ||
+      event.type === "exception" ||
+      event.recurrence != null,
   };
 }
 

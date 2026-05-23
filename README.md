@@ -41,7 +41,7 @@ Implemented now:
 
 Planned next:
 
-- Recurring meeting sync hardening
+- Broader recurring-meeting edge-case hardening
 
 ## Planned Features
 
@@ -750,6 +750,8 @@ The current sync implementation:
 - looks up existing Notion pages by the configured Outlook event ID property
 - skips updates when the stored `changeKey` matches unless `--force-update` is used
 - updates existing pages when the `changeKey` differs
+- archives matching Notion pages for cancelled meetings that were previously synced
+- skips creating brand-new pages for cancelled meetings
 - creates new pages when no matching event ID is found
 - archives matching Notion pages when Graph delta reports deleted events
 - persists delta state only after a successful non-dry-run sync
@@ -758,7 +760,7 @@ The current sync implementation:
 
 Not implemented yet:
 
-- recurring meeting edge-case hardening
+- broader recurring meeting edge-case hardening for moved/cancelled instances across all series changes
 - MCP-based Notion integration
 
 ## Idempotency

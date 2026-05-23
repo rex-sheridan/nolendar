@@ -407,13 +407,13 @@ Status:
 - Safe state advancement only after successful sync
 
 Status:
-- In progress
+- Complete
 
 Current scope:
 - `sync` now uses Microsoft Graph calendar-view delta queries
 - delta links are stored per calendar in `.nolendar/state.json`
 - stored delta links are only reused when the saved window matches the current resolved window exactly
-- removed/deleted delta events currently fail the sync instead of being applied
+- removed/deleted delta events archive the matching Notion pages during sync
 
 ### Milestone 5: Recurrence and Deletion Hardening
 
@@ -422,7 +422,13 @@ Current scope:
 - Cancelled event behavior
 
 Status:
-- Not started
+- In progress
+
+Current scope:
+- deleted delta events are handled by archiving the matching Notion pages
+- `seriesMaster` items are ignored so they do not create duplicate meeting pages
+- recurring exceptions and cancelled instances are the primary remaining correctness work
+- initial handling for cancelled events should archive existing pages and avoid creating new cancelled meeting pages
 
 ### Milestone 6: Remaining Product Features
 
@@ -432,7 +438,13 @@ Status:
 - Auth/token-cache hardening and helper commands
 
 Status:
-- Not started
+- In progress
+
+Current scope:
+- page-copy templates via `notion.templatePageId` are implemented
+- true Notion data source templates via `notion.dataSourceTemplate` are implemented
+- `ignorePersonal` and `ignoreOptionalAttendance` are implemented
+- remaining work is optional MCP support plus auth/runtime polish
 
 ## Open Decisions
 
