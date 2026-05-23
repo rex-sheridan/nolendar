@@ -258,6 +258,7 @@ If you only have the parent Notion database/container ID, you may still need the
 Once the values are set, the usual sequence is:
 
 ```bash
+npm run dev -- init
 npm run dev -- validate-config --config nolendar.yml
 npm run dev -- validate-notion --config nolendar.yml
 npm run dev -- sync --config nolendar.yml --dry-run
@@ -267,6 +268,31 @@ npm run dev -- sync --config nolendar.yml --ensure-properties
 ## Usage
 
 Run the CLI in development mode:
+
+```bash
+npm run dev -- init
+npm run dev -- validate-config --config nolendar.yml
+```
+
+Generate a starter config at the default location:
+
+```bash
+npm run dev -- init
+```
+
+Generate a starter config at a custom path:
+
+```bash
+npm run dev -- init --config ./config/nolendar.yml
+```
+
+Overwrite an existing config file:
+
+```bash
+npm run dev -- init --force
+```
+
+Validate the generated config:
 
 ```bash
 npm run dev -- validate-config --config nolendar.yml
@@ -325,6 +351,8 @@ node dist/index.js list --config nolendar.yml --lookahead 7d
   - Validates access to the configured Notion data source and checks required properties
 - `sync`
   - Lists meetings for the requested window and creates, updates, or skips Notion pages based on idempotency checks
+- `init`
+  - Writes a starter `nolendar.yml` config file
 
 ### Example `list` Output
 

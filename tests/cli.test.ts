@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createCli, runCli } from "../src/cli.js";
 
 describe("cli", () => {
-  it("registers the expected milestone 1 commands", () => {
+  it("registers the expected commands", () => {
     const cli = createCli({
       stdout: { log: vi.fn() },
       stderr: { error: vi.fn() },
@@ -11,7 +11,7 @@ describe("cli", () => {
 
     const commandNames = cli.commands.map((command) => command.name());
 
-    expect(commandNames).toEqual(["list", "validate-config", "validate-notion", "sync"]);
+    expect(commandNames).toEqual(["list", "validate-config", "validate-notion", "sync", "init"]);
   });
 
   it("returns a non-zero exit code for invalid lookahead values", async () => {

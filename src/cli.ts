@@ -8,6 +8,7 @@ import { GraphMeetingSource } from "./graph/graph-meeting-source.js";
 import type { LookaheadWindow } from "./domain/config.js";
 import { listMeetings } from "./list.js";
 import { formatMeeting } from "./meeting-format.js";
+import { writeDefaultConfig } from "./init-config.js";
 import { resolveNotionAuthToken } from "./notion/auth.js";
 import { ApiNotionClient } from "./notion/api-notion-client.js";
 import { validateNotionSchema } from "./notion/schema.js";
@@ -103,6 +104,19 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
       deps.stdout.log(
         `Sync summary: created=${syncResult.created}, updated=${syncResult.updated}, skipped=${syncResult.skipped}, filtered=${syncResult.filtered}, dryRun=${syncResult.dryRun}`,
       );
+    });
+
+  program
+    .command("init")
+    .description("Generate a starter nolendar.yml config file.")
+    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("--force", "Overwrite an existing config file", false)
+    .action(async (options: { config: string; force: boolean }) => {
+      const writtenPath = await writeDefaultConfig(options.config, {
+        force: options.force,
+      });
+
+      deps.stdout.log(`Wrote starter config to ${writtenPath}`);
     });
 
   program.exitOverride();
