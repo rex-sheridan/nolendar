@@ -114,6 +114,9 @@ notion:
     - meeting
     - notes
   defaultAssigneeEmail: you@example.com
+  pageIcon:
+    type: emoji
+    emoji: "📝"
 
 calendars:
   - id: primary
@@ -152,6 +155,7 @@ sync:
 - `notion.databaseId` is required
 - `notion.defaultTags` can be used to apply static tags to each created Notion page
 - `notion.defaultAssigneeEmail` can be used to resolve a Notion user by email for the configured assignee property
+- `notion.pageIcon` can be used to apply a static page icon to created or updated Notion pages
 - with the current Notion API model, this value should be the target data source ID used for row queries and page creation
 - `calendars` must contain at least one calendar
 - `sync.lookahead` defaults to `today`
@@ -198,6 +202,7 @@ Current Notion page creation supports:
 - tags from `notion.defaultTags` when `mapping.tags` is configured
 - assignee from `notion.defaultAssigneeEmail` when configured and resolvable
 - otherwise assignee from the authenticated Notion identity when `mapping.assignee` is configured
+- static page icons via `notion.pageIcon`
 - meeting body content from the full Outlook event body when available, otherwise `bodyPreview`
 - Teams join link extraction from the Outlook event body when Graph does not return `onlineMeeting.joinUrl`
 
@@ -239,6 +244,33 @@ Notes:
 - email-based resolution requires Notion user information capabilities that expose `person.email`
 - Notion's users API does not support server-side filtering by email, so Nolendar resolves this by listing workspace users and matching client-side
 - if the email cannot be resolved, Nolendar falls back to the authenticated Notion identity
+
+Page icon configuration examples:
+
+Emoji icon:
+
+```yaml
+notion:
+  pageIcon:
+    type: emoji
+    emoji: "📝"
+```
+
+Native Notion icon with color:
+
+```yaml
+notion:
+  pageIcon:
+    type: icon
+    name: calendar
+    color: blue
+```
+
+Notes:
+
+- Nolendar writes the configured icon during both page creation and page update
+- native Notion icons support `name` and `color`
+- Notion's API documentation indicates icon color updates may be limited depending on the icon/type/path, so creation support is the more reliable assumption
 
 ## Environment Variables
 

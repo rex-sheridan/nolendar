@@ -10,6 +10,9 @@ notion:
   defaultTags:
     - meeting
   defaultAssigneeEmail: you@example.com
+  pageIcon:
+    type: emoji
+    emoji: "📝"
 
 calendars:
   - id: primary

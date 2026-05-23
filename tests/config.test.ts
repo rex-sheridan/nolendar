@@ -43,6 +43,52 @@ describe("normalizeConfig", () => {
     expect(config.notion.defaultAssigneeEmail).toBe("me@example.com");
   });
 
+  it("accepts an emoji page icon", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        pageIcon: {
+          type: "emoji",
+          emoji: "📝",
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+    });
+
+    expect(config.notion.pageIcon).toEqual({
+      type: "emoji",
+      emoji: "📝",
+    });
+  });
+
+  it("accepts a native notion icon with color", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        pageIcon: {
+          type: "icon",
+          name: "calendar",
+          color: "blue",
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+    });
+
+    expect(config.notion.pageIcon).toEqual({
+      type: "icon",
+      name: "calendar",
+      color: "blue",
+    });
+  });
+
   it("resolves configured state path relative to config file", () => {
     const config = normalizeConfig(
       {

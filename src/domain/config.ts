@@ -12,7 +12,19 @@ export interface NotionConfig {
   templatePageId?: string;
   defaultTags?: string[];
   defaultAssigneeEmail?: string;
+  pageIcon?: NotionPageIconConfig;
 }
+
+export type NotionPageIconConfig =
+  | {
+      type: "emoji";
+      emoji: string;
+    }
+  | {
+      type: "icon";
+      name: string;
+      color?: string;
+    };
 
 export interface CalendarConfig {
   id: string;

@@ -161,6 +161,7 @@ export class ApiNotionClient implements NotionClient {
       properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
         assigneeUserId,
       }),
+      icon: buildPageIcon(args.config),
       children: buildMeetingChildren(args.meeting),
     })) as { id?: string };
 
@@ -183,6 +184,7 @@ export class ApiNotionClient implements NotionClient {
       properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
         assigneeUserId,
       }),
+      icon: buildPageIcon(args.config),
     });
   }
 
@@ -262,4 +264,27 @@ function readRichTextProperty(property: unknown): string {
   }
 
   return richText.map((entry) => entry.plain_text ?? "").join("");
+}
+
+function buildPageIcon(config: NolendarConfig): Record<string, unknown> | undefined {
+  const pageIcon = config.notion.pageIcon;
+
+  if (!pageIcon) {
+    return undefined;
+  }
+
+  if (pageIcon.type === "emoji") {
+    return {
+      type: "emoji",
+      emoji: pageIcon.emoji,
+    };
+  }
+
+  return {
+    type: "icon",
+    icon: {
+      name: pageIcon.name,
+      color: pageIcon.color ?? "gray",
+    },
+  };
 }

@@ -96,12 +96,14 @@ function normalizeNotion(value: unknown): NotionConfig {
     record.defaultAssigneeEmail,
     "`notion.defaultAssigneeEmail` must be a string.",
   );
+  const pageIcon = normalizeNotionPageIcon(record.pageIcon);
 
   return {
     databaseId,
     templatePageId,
     defaultTags,
     defaultAssigneeEmail,
+    pageIcon,
   };
 }
 
@@ -259,4 +261,30 @@ function optionalStringArray(value: unknown, message: string): string[] | undefi
   }
 
   return value;
+}
+
+function normalizeNotionPageIcon(value: unknown): NotionConfig["pageIcon"] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const record = asRecord(value, "`notion.pageIcon` must be an object.");
+  const type = requireString(record.type, "`notion.pageIcon.type` is required.");
+
+  if (type === "emoji") {
+    return {
+      type,
+      emoji: requireString(record.emoji, "`notion.pageIcon.emoji` is required for emoji icons."),
+    };
+  }
+
+  if (type === "icon") {
+    return {
+      type,
+      name: requireString(record.name, "`notion.pageIcon.name` is required for native icons."),
+      color: optionalString(record.color, "`notion.pageIcon.color` must be a string."),
+    };
+  }
+
+  throw new ConfigError("`notion.pageIcon.type` must be one of: emoji, icon.");
 }
