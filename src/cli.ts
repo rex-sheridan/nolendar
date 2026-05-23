@@ -94,7 +94,15 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--lookahead <window>", "One of: today, 24h, 7d")
     .option("--dry-run", "Preview sync actions without changing Notion", false)
     .option("--ensure-properties", "Create missing required properties if possible", false)
-    .action(async (options: { config: string; lookahead?: string; dryRun: boolean; ensureProperties: boolean }) => {
+    .option("--force-update", "Update matching Notion pages even when the Outlook changeKey is unchanged", false)
+    .action(
+      async (options: {
+        config: string;
+        lookahead?: string;
+        dryRun: boolean;
+        ensureProperties: boolean;
+        forceUpdate: boolean;
+      }) => {
       const config = await loadConfig(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
       const meetingSource = buildGraphMeetingSource(config, deps);
@@ -103,12 +111,14 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
       const syncResult = await syncMeetingsToNotion(config, meetingsResult.meetings, notion, {
         dryRun: options.dryRun,
         ensureProperties: options.ensureProperties,
+        forceUpdate: options.forceUpdate,
       });
 
       deps.stdout.log(
         `Sync summary: created=${syncResult.created}, updated=${syncResult.updated}, skipped=${syncResult.skipped}, filtered=${syncResult.filtered}, dryRun=${syncResult.dryRun}`,
       );
-    });
+      },
+    );
 
   program
     .command("init")

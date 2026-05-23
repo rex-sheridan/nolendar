@@ -447,6 +447,7 @@ npm run dev -- validate-config --config nolendar.yml
 npm run dev -- validate-notion --config nolendar.yml
 npm run dev -- sync --config nolendar.yml --dry-run
 npm run dev -- sync --config nolendar.yml --ensure-properties
+npm run dev -- sync --config nolendar.yml --force-update
 ```
 
 If you are using `MICROSOFT_ACCESS_TOKEN`, export it before running `list` or `sync`:
@@ -525,6 +526,12 @@ Run the initial sync and auto-create missing required properties:
 npm run dev -- sync --config nolendar.yml --ensure-properties
 ```
 
+Force-update already-synced pages even when the stored Outlook `changeKey` matches:
+
+```bash
+npm run dev -- sync --config nolendar.yml --force-update
+```
+
 Or build the project and run the compiled CLI:
 
 ```bash
@@ -573,7 +580,7 @@ The current sync implementation:
   - `minDurationMinutes`
   - `requireAttendees`
 - looks up existing Notion pages by the configured Outlook event ID property
-- skips updates when the stored `changeKey` matches
+- skips updates when the stored `changeKey` matches unless `--force-update` is used
 - updates existing pages when the `changeKey` differs
 - creates new pages when no matching event ID is found
 

@@ -176,4 +176,37 @@ describe("syncMeetingsToNotion", () => {
     expect(notion.createMeetingPage).not.toHaveBeenCalled();
     expect(notion.updateMeetingPage).not.toHaveBeenCalled();
   });
+
+  it("force-updates an existing page when the changeKey matches", async () => {
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
+        },
+      })),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => ({ id: "page-1", eventId: "evt-1", changeKey: "ck-1" })),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+    };
+
+    const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion, { forceUpdate: true });
+
+    expect(result).toEqual({
+      created: 0,
+      updated: 1,
+      skipped: 0,
+      filtered: 0,
+      dryRun: false,
+    });
+    expect(notion.updateMeetingPage).toHaveBeenCalledTimes(1);
+    expect(notion.createMeetingPage).not.toHaveBeenCalled();
+  });
 });

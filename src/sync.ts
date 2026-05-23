@@ -7,6 +7,7 @@ import { validateOrEnsureNotionSchema } from "./notion/validation.js";
 export interface SyncOptions {
   dryRun?: boolean;
   ensureProperties?: boolean;
+  forceUpdate?: boolean;
 }
 
 export interface SyncResult {
@@ -61,7 +62,7 @@ export async function syncMeetingsToNotion(
       continue;
     }
 
-    if (existing.changeKey === meeting.changeKey) {
+    if (existing.changeKey === meeting.changeKey && !options.forceUpdate) {
       result.skipped += 1;
       continue;
     }
