@@ -39,9 +39,19 @@ export function buildMeetingProperties(
 export function buildMeetingChildren(meeting: Meeting): unknown[] {
   const children: unknown[] = [];
 
-  if (meeting.agenda) {
-    children.push(headingBlock("Agenda"));
-    children.push(paragraphBlock(meeting.agenda));
+  if (meeting.meetingLink) {
+    children.push(headingBlock("Meeting Link"));
+    children.push(linkParagraphBlock("Open meeting", meeting.meetingLink));
+  }
+
+  if (meeting.eventLink) {
+    children.push(headingBlock("Calendar Event"));
+    children.push(linkParagraphBlock("Open event in Outlook", meeting.eventLink));
+  }
+
+  if (meeting.details || meeting.agenda) {
+    children.push(headingBlock("Meeting Details"));
+    children.push(paragraphBlock(meeting.details ?? meeting.agenda ?? ""));
   }
 
   children.push(headingBlock("Notes"));
@@ -145,6 +155,26 @@ function paragraphBlock(content: string): unknown {
     type: "paragraph",
     paragraph: {
       rich_text: [textBlock(content)],
+    },
+  };
+}
+
+function linkParagraphBlock(label: string, url: string): unknown {
+  return {
+    object: "block",
+    type: "paragraph",
+    paragraph: {
+      rich_text: [
+        {
+          type: "text",
+          text: {
+            content: label,
+            link: {
+              url,
+            },
+          },
+        },
+      ],
     },
   };
 }

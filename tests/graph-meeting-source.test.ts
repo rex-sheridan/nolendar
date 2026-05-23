@@ -46,6 +46,11 @@ describe("normalizeGraphEvent", () => {
         },
         webLink: "https://outlook.example/event",
         bodyPreview: "Discuss roadmap",
+        body: {
+          contentType: "html",
+          content:
+            "<html><body><p>Discuss roadmap</p><p><a href=\"https://teams.microsoft.com/l/meetup-join/123\">Join Teams</a></p></body></html>",
+        },
         responseStatus: {
           response: "accepted",
         },
@@ -78,6 +83,7 @@ describe("normalizeGraphEvent", () => {
       meetingLink: "https://teams.example/join",
       eventLink: "https://outlook.example/event",
       agenda: "Discuss roadmap",
+      details: "Discuss roadmap\nJoin Teams",
       responseStatus: "accepted",
       isCancelled: false,
       isRecurring: true,
@@ -143,5 +149,30 @@ describe("GraphMeetingSource", () => {
     });
     expect(meetings).toHaveLength(1);
     expect(meetings[0]?.title).toBe("Planning");
+  });
+
+  it("extracts a Teams link from the event body when onlineMeeting is unavailable", () => {
+    const meeting = normalizeGraphEvent(
+      {
+        id: "evt-2",
+        changeKey: "ck-2",
+        subject: "Review",
+        start: {
+          dateTime: "2026-05-22T10:00:00.000Z",
+        },
+        end: {
+          dateTime: "2026-05-22T11:00:00.000Z",
+        },
+        body: {
+          contentType: "html",
+          content:
+            "<p>Join here: <a href=\"https://teams.microsoft.com/l/meetup-join/abc\">Microsoft Teams Meeting</a></p>",
+        },
+      },
+      CALENDAR,
+    );
+
+    expect(meeting.meetingLink).toBe("https://teams.microsoft.com/l/meetup-join/abc");
+    expect(meeting.details).toBe("Join here: Microsoft Teams Meeting");
   });
 });

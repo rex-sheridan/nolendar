@@ -30,6 +30,10 @@ export interface GraphEvent {
   onlineMeetingUrl?: string | null;
   webLink?: string | null;
   bodyPreview?: string | null;
+  body?: {
+    contentType?: string | null;
+    content?: string | null;
+  } | null;
   responseStatus?: {
     response?: string | null;
   } | null;

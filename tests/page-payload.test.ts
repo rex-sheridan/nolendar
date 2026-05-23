@@ -45,7 +45,9 @@ const MEETING: Meeting = {
   title: "Planning",
   start: "2026-05-22T13:00:00.000Z",
   end: "2026-05-22T14:00:00.000Z",
+  meetingLink: "https://teams.example/join",
   eventLink: "https://outlook.example/event",
+  details: "Discuss roadmap\nBring blockers",
   attendees: [],
   isCancelled: false,
   isRecurring: false,
@@ -75,5 +77,21 @@ describe("buildMeetingProperties", () => {
     expect(properties.Tags).toEqual({
       multi_select: [{ name: "meeting" }, { name: "outlook" }],
     });
+  });
+
+  it("includes meeting and event links plus meeting details in the page body", async () => {
+    const { buildMeetingChildren } = await import("../src/notion/page-payload.js");
+    const children = buildMeetingChildren(MEETING) as Array<Record<string, unknown>>;
+
+    expect(children[0]?.type).toBe("heading_2");
+    expect(children[1]?.type).toBe("paragraph");
+    expect(
+      ((children[1]?.paragraph as { rich_text?: Array<{ text?: { link?: { url?: string } } }> }).rich_text?.[0]?.text
+        ?.link?.url ?? null),
+    ).toBe("https://teams.example/join");
+    expect(
+      ((children[3]?.paragraph as { rich_text?: Array<{ text?: { link?: { url?: string } } }> }).rich_text?.[0]?.text
+        ?.link?.url ?? null),
+    ).toBe("https://outlook.example/event");
   });
 });

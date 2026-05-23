@@ -17,6 +17,7 @@ export interface Meeting {
   meetingLink?: string;
   eventLink?: string;
   agenda?: string;
+  details?: string;
   responseStatus?: string;
   isCancelled: boolean;
   isRecurring: boolean;

@@ -28,7 +28,9 @@ Implemented now:
   - minimum meeting duration
   - meetings without attendees
 - Created Notion pages include sections for:
-  - Agenda
+  - Meeting Link
+  - Calendar Event
+  - Meeting Details
   - Notes
   - Action items
 
@@ -188,6 +190,16 @@ Current Notion page creation supports:
 - change key from the Outlook event `changeKey`
 - URL from the Outlook event `webLink` when `mapping.eventLink` is configured
 - tags from `notion.defaultTags` when `mapping.tags` is configured
+- meeting body content from the full Outlook event body when available, otherwise `bodyPreview`
+- Teams join link extraction from the Outlook event body when Graph does not return `onlineMeeting.joinUrl`
+
+Current Notion page body content includes:
+
+- a `Meeting Link` section when a meeting join URL is available
+- a `Calendar Event` section when the Outlook `webLink` is available
+- a `Meeting Details` section populated from the event body text
+- `Notes`
+- `Action items`
 
 Example:
 
