@@ -1,5 +1,6 @@
 import { Command } from "commander";
 
+import { createConsoleTimingReporter, type ApiTimingReporter } from "./api-timing.js";
 import { loadConfig } from "./config.js";
 import type { NolendarConfig } from "./domain/config.js";
 import { resolveGraphAuthConfig } from "./graph/auth.js";
@@ -23,13 +24,14 @@ export interface CliDependencies {
   stdout: Pick<Console, "log">;
   stderr: Pick<Console, "error">;
   loadConfig?: typeof loadConfig;
-  buildNotionClient?: () => ApiNotionClient;
+  timingSink?: Pick<Console, "log">;
+  buildNotionClient?: (options?: { timingReporter?: ApiTimingReporter }) => ApiNotionClient;
 }
 
 export function createCli(deps: CliDependencies = defaultDeps()): Command {
   const program = new Command();
   const loadConfigFn = deps.loadConfig ?? loadConfig;
-  const buildNotionClientFn = deps.buildNotionClient ?? (() => buildNotionClient(deps));
+  const buildNotionClientFn = deps.buildNotionClient ?? ((options?: { timingReporter?: ApiTimingReporter }) => buildNotionClient(deps, options));
 
   program.name("nolendar").description("Sync Outlook meetings into Notion.");
 
@@ -38,10 +40,12 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .description("Print upcoming meetings for the requested time period.")
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .option("--lookahead <window>", "One of: today, 24h, 7d")
-    .action(async (options: { config: string; lookahead?: string }) => {
+    .option("--timings", "Print API call timings", false)
+    .action(async (options: { config: string; lookahead?: string; timings: boolean }) => {
       const config = await loadConfigFn(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
-      const meetingSource = buildGraphMeetingSource(config, deps);
+      const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+      const meetingSource = buildGraphMeetingSource(config, deps, timingReporter);
       const result = await listMeetings(config, lookahead, { meetingSource });
 
       deps.stdout.log(
@@ -74,9 +78,12 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .description("Validate Notion access and required data source properties.")
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .option("--ensure-properties", "Create missing required properties if possible", false)
-    .action(async (options: { config: string; ensureProperties: boolean }) => {
+    .option("--timings", "Print API call timings", false)
+    .action(async (options: { config: string; ensureProperties: boolean; timings: boolean }) => {
       const config = await loadConfigFn(options.config);
-      const notion = buildNotionClientFn();
+      const notion = buildNotionClientFn({
+        timingReporter: options.timings ? createTimingReporter(deps) : undefined,
+      });
 
       await validateOrEnsureNotionSchema(config, notion, {
         ensureProperties: options.ensureProperties,
@@ -95,9 +102,12 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .command("print-notion-schema")
     .description("Print the detected Notion schema for the configured meeting and People data sources.")
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
-    .action(async (options: { config: string }) => {
+    .option("--timings", "Print API call timings", false)
+    .action(async (options: { config: string; timings: boolean }) => {
       const config = await loadConfigFn(options.config);
-      const notion = buildNotionClientFn();
+      const notion = buildNotionClientFn({
+        timingReporter: options.timings ? createTimingReporter(deps) : undefined,
+      });
 
       const meetingSchema = await notion.retrieveDataSource(config.notion.databaseId);
       for (const line of formatSchemaOutput("Meeting data source", meetingSchema.id, meetingSchema.title, meetingSchema.properties)) {
@@ -120,6 +130,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--dry-run", "Preview sync actions without changing Notion", false)
     .option("--ensure-properties", "Create missing required properties if possible", false)
     .option("--force-update", "Update matching Notion pages even when the Outlook changeKey is unchanged", false)
+    .option("--timings", "Print API call timings", false)
     .action(
       async (options: {
         config: string;
@@ -127,11 +138,15 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         dryRun: boolean;
         ensureProperties: boolean;
         forceUpdate: boolean;
+        timings: boolean;
       }) => {
       const config = await loadConfigFn(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
-      const meetingSource = buildGraphMeetingSource(config, deps);
-      const notion = buildNotionClientFn();
+      const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+      const meetingSource = buildGraphMeetingSource(config, deps, timingReporter);
+      const notion = buildNotionClientFn({
+        timingReporter,
+      });
       const syncResult = await syncCalendarChangesToNotion(
         {
           ...config,
@@ -205,6 +220,7 @@ function defaultDeps(): CliDependencies {
   return {
     stdout: console,
     stderr: console,
+    timingSink: console,
   };
 }
 
@@ -229,24 +245,32 @@ function formatSchemaOutput(
   return lines;
 }
 
-function buildGraphMeetingSource(config: NolendarConfig, deps: CliDependencies): GraphMeetingSource {
+function createTimingReporter(deps: CliDependencies): ApiTimingReporter {
+  return createConsoleTimingReporter(deps.timingSink ?? deps.stdout);
+}
+
+function buildGraphMeetingSource(
+  config: NolendarConfig,
+  deps: CliDependencies,
+  timingReporter?: ApiTimingReporter,
+): GraphMeetingSource {
   const authConfig = resolveGraphAuthConfig(config);
 
   if (authConfig.mode === "auth_code") {
-    return new GraphMeetingSource(new AuthorizationCodeTokenProvider(authConfig, deps.stdout));
+    return new GraphMeetingSource(new AuthorizationCodeTokenProvider(authConfig, deps.stdout), undefined, timingReporter);
   }
 
   if (authConfig.mode === "interactive_browser") {
-    return new GraphMeetingSource(new InteractiveBrowserTokenProvider(authConfig));
+    return new GraphMeetingSource(new InteractiveBrowserTokenProvider(authConfig), undefined, timingReporter);
   }
 
   if (authConfig.mode === "static_access_token") {
-    return new GraphMeetingSource(new StaticAccessTokenProvider(authConfig.accessToken));
+    return new GraphMeetingSource(new StaticAccessTokenProvider(authConfig.accessToken), undefined, timingReporter);
   }
 
-  return new GraphMeetingSource(new DeviceCodeTokenProvider(authConfig, deps.stdout));
+  return new GraphMeetingSource(new DeviceCodeTokenProvider(authConfig, deps.stdout), undefined, timingReporter);
 }
 
-function buildNotionClient(_: CliDependencies): ApiNotionClient {
-  return new ApiNotionClient(resolveNotionAuthToken());
+function buildNotionClient(_: CliDependencies, options?: { timingReporter?: ApiTimingReporter }): ApiNotionClient {
+  return new ApiNotionClient(resolveNotionAuthToken(), undefined, options?.timingReporter);
 }

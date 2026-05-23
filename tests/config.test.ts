@@ -93,6 +93,26 @@ describe("normalizeConfig", () => {
     });
   });
 
+  it("accepts configured generated page content sections", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        pageContent: {
+          sections: ["meeting_link", "calendar_event", "meeting_details"],
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+    });
+
+    expect(config.notion.pageContent).toEqual({
+      sections: ["meeting_link", "calendar_event", "meeting_details"],
+    });
+  });
+
   it("accepts an emoji page icon", () => {
     const config = normalizeConfig({
       notion: {
@@ -284,6 +304,28 @@ describe("normalizeConfig", () => {
         ],
       }),
     ).toThrowError(new ConfigError("`notion.templatePageId` and `notion.dataSourceTemplate` are mutually exclusive."));
+  });
+
+  it("rejects an invalid generated page content section", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+          pageContent: {
+            sections: ["notes", "bogus"],
+          },
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+      }),
+    ).toThrowError(
+      new ConfigError(
+        "`notion.pageContent.sections[1]` must be one of: meeting_link, calendar_event, meeting_details, notes, action_items.",
+      ),
+    );
   });
 
   it("accepts the authorization code auth mode", () => {

@@ -42,28 +42,46 @@ export function buildMeetingProperties(
   return properties;
 }
 
-export function buildMeetingChildren(meeting: Meeting): unknown[] {
+export function buildMeetingChildren(config: NolendarConfig, meeting: Meeting): unknown[] {
   const children: unknown[] = [];
+  const sections = config.notion.pageContent?.sections ?? [
+    "meeting_link",
+    "calendar_event",
+    "meeting_details",
+    "notes",
+    "action_items",
+  ];
 
-  if (meeting.meetingLink) {
-    children.push(headingBlock("Meeting Link"));
-    children.push(linkParagraphBlock("Open meeting", meeting.meetingLink));
+  for (const section of sections) {
+    switch (section) {
+      case "meeting_link":
+        if (meeting.meetingLink) {
+          children.push(headingBlock("Meeting Link"));
+          children.push(linkParagraphBlock("Open meeting", meeting.meetingLink));
+        }
+        break;
+      case "calendar_event":
+        if (meeting.eventLink) {
+          children.push(headingBlock("Calendar Event"));
+          children.push(linkParagraphBlock("Open event in Outlook", meeting.eventLink));
+        }
+        break;
+      case "meeting_details":
+        if (meeting.details || meeting.agenda) {
+          children.push(headingBlock("Meeting Details"));
+          children.push(paragraphBlock(meeting.details ?? meeting.agenda ?? ""));
+        }
+        break;
+      case "notes":
+        children.push(headingBlock("Notes"));
+        children.push(paragraphBlock(" "));
+        break;
+      case "action_items":
+        children.push(headingBlock("Action items"));
+        children.push(paragraphBlock(" "));
+        break;
+    }
   }
-
-  if (meeting.eventLink) {
-    children.push(headingBlock("Calendar Event"));
-    children.push(linkParagraphBlock("Open event in Outlook", meeting.eventLink));
-  }
-
-  if (meeting.details || meeting.agenda) {
-    children.push(headingBlock("Meeting Details"));
-    children.push(paragraphBlock(meeting.details ?? meeting.agenda ?? ""));
-  }
-
-  children.push(headingBlock("Notes"));
-  children.push(paragraphBlock(" "));
-  children.push(headingBlock("Action items"));
-  children.push(paragraphBlock(" "));
 
   return children;
 }

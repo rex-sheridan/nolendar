@@ -11,6 +11,7 @@ export interface NotionConfig {
   databaseId: string;
   templatePageId?: string;
   dataSourceTemplate?: NotionDataSourceTemplateConfig;
+  pageContent?: NotionPageContentConfig;
   defaultTags?: string[];
   defaultAssigneeEmail?: string;
   pageIcon?: NotionPageIconConfig;
@@ -22,6 +23,17 @@ export interface NotionDataSourceTemplateConfig {
   templateId?: string;
   timezone?: string;
 }
+
+export interface NotionPageContentConfig {
+  sections: NotionPageContentSection[];
+}
+
+export type NotionPageContentSection =
+  | "meeting_link"
+  | "calendar_event"
+  | "meeting_details"
+  | "notes"
+  | "action_items";
 
 export interface NotionPeopleDataSourceConfig {
   databaseId: string;

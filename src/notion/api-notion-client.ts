@@ -1,5 +1,6 @@
 import { Client } from "@notionhq/client";
 
+import type { ApiTimingReporter } from "../api-timing.js";
 import type { NolendarConfig } from "../domain/config.js";
 import type { Meeting } from "../domain/meeting.js";
 import type { NotionDataSourceProperty, NotionDataSourceSchema, NotionPageRecord, RequiredNotionProperty } from "../domain/notion.js";
@@ -34,23 +35,27 @@ interface NotionSdkClient {
 
 export class ApiNotionClient implements NotionClient {
   private readonly client: NotionSdkClient;
+  private readonly timingReporter?: ApiTimingReporter;
   private readonly defaultAssigneeCache = new Map<string, string | undefined>();
   private readonly participantPageCache = new Map<string, string>();
   private readonly templateBlockCache = new Map<string, unknown[]>();
 
-  constructor(authToken: string, client?: NotionSdkClient) {
+  constructor(authToken: string, client?: NotionSdkClient, timingReporter?: ApiTimingReporter) {
     this.client =
       client ??
       (new Client({
         auth: authToken,
         notionVersion: NOTION_API_VERSION,
       }) as unknown as NotionSdkClient);
+    this.timingReporter = timingReporter;
   }
 
   async retrieveDataSource(dataSourceId: string): Promise<NotionDataSourceSchema> {
-    const response = (await this.client.dataSources.retrieve({
-      data_source_id: dataSourceId,
-    })) as {
+    const response = (await this.timed("dataSources.retrieve", `data_source_id=${dataSourceId}`, () =>
+      this.client.dataSources.retrieve({
+        data_source_id: dataSourceId,
+      }),
+    )) as {
       id?: string;
       title?: Array<{ plain_text?: string }>;
       properties?: Record<string, { id?: string; name?: string; type?: string }>;
@@ -78,7 +83,7 @@ export class ApiNotionClient implements NotionClient {
       }
     }
 
-    const response = (await this.client.users.me()) as {
+    const response = (await this.timed("users.me", undefined, () => this.client.users.me())) as {
       id?: string;
       type?: string;
       bot?: {
@@ -124,10 +129,15 @@ export class ApiNotionClient implements NotionClient {
       payload[property.name] = propertyTypePayload(property.type);
     }
 
-    await this.client.dataSources.update({
-      data_source_id: dataSourceId,
-      properties: payload,
-    });
+    await this.timed(
+      "dataSources.update",
+      `data_source_id=${dataSourceId} properties=${Object.keys(payload).sort().join(",")}`,
+      () =>
+      this.client.dataSources.update({
+        data_source_id: dataSourceId,
+        properties: payload,
+      }),
+    );
   }
 
   async findPageByEventId(args: {
@@ -136,17 +146,22 @@ export class ApiNotionClient implements NotionClient {
     changeKeyPropertyName: string;
     eventId: string;
   }): Promise<NotionPageRecord | null> {
-    const response = (await this.client.dataSources.query({
-      data_source_id: args.dataSourceId,
-      result_type: "page",
-      page_size: 1,
-      filter: {
-        property: args.eventIdPropertyName,
-        rich_text: {
-          equals: args.eventId,
+    const response = (await this.timed(
+      "dataSources.query",
+      `data_source_id=${args.dataSourceId} filter=${args.eventIdPropertyName}:rich_text=${args.eventId}`,
+      () =>
+      this.client.dataSources.query({
+        data_source_id: args.dataSourceId,
+        result_type: "page",
+        page_size: 1,
+        filter: {
+          property: args.eventIdPropertyName,
+          rich_text: {
+            equals: args.eventId,
+          },
         },
-      },
-    })) as {
+      }),
+    )) as {
       results?: Array<{
         id?: string;
         object?: string;
@@ -180,28 +195,35 @@ export class ApiNotionClient implements NotionClient {
       assigneeUserId,
       participantPageIds,
     });
-    const meetingChildren = buildMeetingChildren(args.meeting);
+    const meetingChildren = buildMeetingChildren(args.config, args.meeting);
     const templateBlocks = args.config.notion.templatePageId
       ? await this.getTemplateBlocks(args.config.notion.templatePageId)
       : [];
     const dataSourceTemplate = buildDataSourceTemplatePayload(args.config);
-    const response = (await this.client.pages.create({
-      parent: {
-        data_source_id: args.dataSource.id,
-      },
-      properties,
-      icon: buildPageIcon(args.config),
-      template: dataSourceTemplate,
-      children: dataSourceTemplate ? undefined : [...templateBlocks, ...meetingChildren],
-    })) as { id?: string };
+    const response = (await this.timed(
+      "pages.create",
+      describeCreateMeetingPage(args.dataSource.id, dataSourceTemplate, templateBlocks.length, meetingChildren.length),
+      () =>
+      this.client.pages.create({
+        parent: {
+          data_source_id: args.dataSource.id,
+        },
+        properties,
+        icon: buildPageIcon(args.config),
+        template: dataSourceTemplate,
+        children: dataSourceTemplate ? undefined : [...templateBlocks, ...meetingChildren],
+      }),
+    )) as { id?: string };
     const pageId = response.id ?? "";
 
     if (pageId && dataSourceTemplate) {
       await this.waitForTemplateReady(pageId);
-      await this.client.blocks.children.append({
-        block_id: pageId,
-        children: meetingChildren,
-      });
+      await this.timed("blocks.children.append", `block_id=${pageId} children=${meetingChildren.length}`, () =>
+        this.client.blocks.children.append({
+          block_id: pageId,
+          children: meetingChildren,
+        }),
+      );
     }
 
     return {
@@ -219,21 +241,33 @@ export class ApiNotionClient implements NotionClient {
       ? await this.getDefaultAssigneeUserId(args.config.notion.defaultAssigneeEmail)
       : undefined;
     const participantPageIds = await this.resolveParticipantPageIds(args.config, args.meeting);
-    await this.client.pages.update({
-      page_id: args.pageId,
-      properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
+    await this.timed(
+      "pages.update",
+      `page_id=${args.pageId} properties=${Object.keys(buildMeetingProperties(args.config, args.dataSource, args.meeting, {
         assigneeUserId,
         participantPageIds,
+      }))
+        .sort()
+        .join(",")}`,
+      () =>
+      this.client.pages.update({
+        page_id: args.pageId,
+        properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
+          assigneeUserId,
+          participantPageIds,
+        }),
+        icon: buildPageIcon(args.config),
       }),
-      icon: buildPageIcon(args.config),
-    });
+    );
   }
 
   async archivePage(pageId: string): Promise<void> {
-    await this.client.pages.update({
-      page_id: pageId,
-      archived: true,
-    });
+    await this.timed("pages.update", `page_id=${pageId} archived=true`, () =>
+      this.client.pages.update({
+        page_id: pageId,
+        archived: true,
+      }),
+    );
   }
 
   private async findUserIdByEmail(email: string): Promise<string | undefined> {
@@ -241,10 +275,15 @@ export class ApiNotionClient implements NotionClient {
     let nextCursor: string | undefined;
 
     do {
-      const response = (await this.client.users.list({
-        start_cursor: nextCursor,
-        page_size: 100,
-      })) as {
+      const response = (await this.timed(
+        "users.list",
+        `start_cursor=${nextCursor ?? "-"} page_size=100`,
+        () =>
+        this.client.users.list({
+          start_cursor: nextCursor,
+          page_size: 100,
+        }),
+      )) as {
         results?: Array<{
           id?: string;
           type?: string;
@@ -312,17 +351,22 @@ export class ApiNotionClient implements NotionClient {
     emailPropertyName: string,
     email: string,
   ): Promise<string | undefined> {
-    const response = (await this.client.dataSources.query({
-      data_source_id: dataSourceId,
-      result_type: "page",
-      page_size: 1,
-      filter: {
-        property: emailPropertyName,
-        email: {
-          equals: email,
+    const response = (await this.timed(
+      "dataSources.query",
+      `data_source_id=${dataSourceId} filter=${emailPropertyName}:email=${email}`,
+      () =>
+      this.client.dataSources.query({
+        data_source_id: dataSourceId,
+        result_type: "page",
+        page_size: 1,
+        filter: {
+          property: emailPropertyName,
+          email: {
+            equals: email,
+          },
         },
-      },
-    })) as {
+      }),
+    )) as {
       results?: Array<{
         id?: string;
         object?: string;
@@ -338,19 +382,24 @@ export class ApiNotionClient implements NotionClient {
     emailPropertyName: string,
     attendee: { name?: string; email: string },
   ): Promise<string> {
-    const response = (await this.client.pages.create({
-      parent: {
-        data_source_id: dataSourceId,
-      },
-      properties: {
-        [namePropertyName]: {
-          title: [textBlock(attendee.name || attendee.email)],
+    const response = (await this.timed(
+      "pages.create",
+      `parent_data_source_id=${dataSourceId} title=${truncateForTiming(attendee.name || attendee.email)} email=${attendee.email}`,
+      () =>
+      this.client.pages.create({
+        parent: {
+          data_source_id: dataSourceId,
         },
-        [emailPropertyName]: {
-          email: attendee.email,
+        properties: {
+          [namePropertyName]: {
+            title: [textBlock(attendee.name || attendee.email)],
+          },
+          [emailPropertyName]: {
+            email: attendee.email,
+          },
         },
-      },
-    })) as { id?: string };
+      }),
+    )) as { id?: string };
 
     return response.id ?? "";
   }
@@ -360,11 +409,16 @@ export class ApiNotionClient implements NotionClient {
     let nextCursor: string | undefined;
 
     do {
-      const response = (await this.client.blocks.children.list({
-        block_id: blockId,
-        start_cursor: nextCursor,
-        page_size: 100,
-      })) as {
+      const response = (await this.timed(
+        "blocks.children.list",
+        `block_id=${blockId} start_cursor=${nextCursor ?? "-"} page_size=100`,
+        () =>
+        this.client.blocks.children.list({
+          block_id: blockId,
+          start_cursor: nextCursor,
+          page_size: 100,
+        }),
+      )) as {
         results?: Array<Record<string, unknown>>;
         next_cursor?: string | null;
         has_more?: boolean;
@@ -434,6 +488,48 @@ export class ApiNotionClient implements NotionClient {
       await delay(TEMPLATE_READY_POLL_INTERVAL_MS);
     }
   }
+
+  private async timed<T>(operation: string, detail: string | undefined, fn: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+
+    try {
+      const result = await fn();
+      this.timingReporter?.record({
+        service: "notion",
+        operation,
+        detail,
+        status: "ok",
+        durationMs: Date.now() - startedAt,
+      });
+      return result;
+    } catch (error) {
+      this.timingReporter?.record({
+        service: "notion",
+        operation,
+        detail,
+        status: "error",
+        durationMs: Date.now() - startedAt,
+      });
+      throw error;
+    }
+  }
+}
+
+function describeCreateMeetingPage(
+  dataSourceId: string,
+  dataSourceTemplate: Record<string, unknown> | undefined,
+  templateBlockCount: number,
+  meetingChildCount: number,
+): string {
+  if (dataSourceTemplate) {
+    return `parent_data_source_id=${dataSourceId} template=${String(dataSourceTemplate.type)} generated_children=${meetingChildCount}`;
+  }
+
+  return `parent_data_source_id=${dataSourceId} template_blocks=${templateBlockCount} children=${templateBlockCount + meetingChildCount}`;
+}
+
+function truncateForTiming(value: string, maxLength = 40): string {
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 3)}...`;
 }
 
 function normalizeProperties(

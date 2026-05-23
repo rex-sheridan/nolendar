@@ -170,6 +170,82 @@ describe("GraphMeetingSource", () => {
     expect(meetings[0]?.start).toBe("2026-05-22T10:00:00.000Z");
   });
 
+  it("records timing entries for Graph API calls when a reporter is configured", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ mail: "owner@example.com" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "evt-1",
+                changeKey: "ck-1",
+                subject: "Planning",
+                start: {
+                  dateTime: "2026-05-22T10:00:00.0000000",
+                  timeZone: "UTC",
+                },
+                end: {
+                  dateTime: "2026-05-22T11:00:00.0000000",
+                  timeZone: "UTC",
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
+    const timingReporter = {
+      record: vi.fn(),
+    };
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+      timingReporter,
+    );
+
+    await source.listMeetings({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    expect(timingReporter.record).toHaveBeenCalledTimes(2);
+    expect(timingReporter.record).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        service: "graph",
+        operation: expect.stringContaining("GET /v1.0/me?"),
+        status: "200",
+      }),
+    );
+    expect(timingReporter.record).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        service: "graph",
+        operation: expect.stringContaining("/calendarView"),
+        status: "200",
+      }),
+    );
+  });
+
   it("marks the calendar owner as optional when their attendee entry is optional", () => {
     const meeting = normalizeGraphEvent(
       {

@@ -11,6 +11,7 @@ import type {
   MicrosoftAuthMode,
   NolendarConfig,
   NotionConfig,
+  NotionPageContentSection,
 } from "./domain/config.js";
 
 export class ConfigError extends Error {
@@ -96,6 +97,7 @@ function normalizeNotion(value: unknown): NotionConfig {
   const databaseId = requireString(record.databaseId, "`notion.databaseId` is required.");
   const templatePageId = optionalString(record.templatePageId, "`notion.templatePageId` must be a string.");
   const dataSourceTemplate = normalizeDataSourceTemplate(record.dataSourceTemplate);
+  const pageContent = normalizeNotionPageContent(record.pageContent);
   const defaultTags = optionalStringArray(record.defaultTags, "`notion.defaultTags` must be an array of strings.");
   const defaultAssigneeEmail = optionalString(
     record.defaultAssigneeEmail,
@@ -108,6 +110,7 @@ function normalizeNotion(value: unknown): NotionConfig {
     databaseId,
     templatePageId,
     dataSourceTemplate,
+    pageContent,
     defaultTags,
     defaultAssigneeEmail,
     pageIcon,
@@ -350,6 +353,43 @@ function normalizeDataSourceTemplate(value: unknown): NotionConfig["dataSourceTe
     templateId,
     timezone: optionalString(record.timezone, "`notion.dataSourceTemplate.timezone` must be a string."),
   };
+}
+
+function normalizeNotionPageContent(value: unknown): NotionConfig["pageContent"] {
+  if (value === undefined) {
+    return {
+      sections: ["meeting_link", "calendar_event", "meeting_details", "notes", "action_items"],
+    };
+  }
+
+  const record = asRecord(value, "`notion.pageContent` must be an object.");
+  const sections = normalizeNotionPageContentSections(record.sections);
+
+  return {
+    sections,
+  };
+}
+
+function normalizeNotionPageContentSections(value: unknown): NotionPageContentSection[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new ConfigError("`notion.pageContent.sections` must be a non-empty array.");
+  }
+
+  return value.map((entry, index) => {
+    if (
+      entry === "meeting_link" ||
+      entry === "calendar_event" ||
+      entry === "meeting_details" ||
+      entry === "notes" ||
+      entry === "action_items"
+    ) {
+      return entry;
+    }
+
+    throw new ConfigError(
+      `\`notion.pageContent.sections[${index}]\` must be one of: meeting_link, calendar_event, meeting_details, notes, action_items.`,
+    );
+  });
 }
 
 function validateParticipantConfig(notion: NotionConfig, mapping: MappingConfig): void {

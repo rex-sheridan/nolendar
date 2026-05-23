@@ -79,6 +79,93 @@ describe("ApiNotionClient.getDefaultAssigneeUserId", () => {
 });
 
 describe("ApiNotionClient page icon writes", () => {
+  it("records timing entries for Notion API calls when a reporter is configured", async () => {
+    const timingReporter = {
+      record: vi.fn(),
+    };
+    const pages = {
+      create: vi.fn(async () => ({ id: "page-1" })),
+      update: vi.fn(async () => undefined),
+    };
+    const client = new ApiNotionClient(
+      "token",
+      {
+        blocks: {
+          children: {
+            append: vi.fn(async () => undefined),
+            list: vi.fn(),
+          },
+        },
+        dataSources: {
+          retrieve: vi.fn(),
+          update: vi.fn(),
+          query: vi.fn(),
+        },
+        pages,
+        users: {
+          me: vi.fn(),
+          list: vi.fn(),
+        },
+      },
+      timingReporter,
+    );
+
+    await client.createMeetingPage({
+      config: {
+        microsoft: { tenant: "common", authMode: "device_code" },
+        notion: {
+          databaseId: "data-source-id",
+        },
+        calendars: [],
+        filters: {
+          ignoreDeclined: true,
+          requireAttendees: false,
+          ignorePersonal: false,
+          ignoreOptionalAttendance: false,
+        },
+        mapping: {
+          title: "Name",
+          due: "Due",
+          eventId: "Outlook Event ID",
+          changeKey: "Outlook ChangeKey",
+        },
+        sync: {
+          lookahead: "today",
+          statePath: "/tmp/.nolendar/state.json",
+        },
+      },
+      dataSource: {
+        id: "data-source-id",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+        },
+      },
+      meeting: {
+        id: "evt-1",
+        changeKey: "ck-1",
+        calendarId: "primary",
+        title: "Planning",
+        start: "2026-05-22T13:00:00.000Z",
+        end: "2026-05-22T14:00:00.000Z",
+        attendees: [],
+        isCancelled: false,
+        isRecurring: false,
+      },
+    });
+
+    expect(timingReporter.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: "notion",
+        operation: "pages.create",
+        detail: "parent_data_source_id=data-source-id template_blocks=0 children=4",
+        status: "ok",
+      }),
+    );
+  });
+
   it("sends an emoji page icon when configured", async () => {
     const pages = {
       create: vi.fn(async () => ({ id: "page-1" })),

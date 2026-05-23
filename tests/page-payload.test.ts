@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { NolendarConfig } from "../src/domain/config.js";
 import type { Meeting } from "../src/domain/meeting.js";
-import { buildMeetingProperties } from "../src/notion/page-payload.js";
+import { buildMeetingChildren, buildMeetingProperties } from "../src/notion/page-payload.js";
 
 const CONFIG: NolendarConfig = {
   microsoft: {
@@ -99,9 +99,8 @@ describe("buildMeetingProperties", () => {
     });
   });
 
-  it("includes meeting and event links plus meeting details in the page body", async () => {
-    const { buildMeetingChildren } = await import("../src/notion/page-payload.js");
-    const children = buildMeetingChildren(MEETING) as Array<Record<string, unknown>>;
+  it("includes meeting and event links plus meeting details in the default page body", () => {
+    const children = buildMeetingChildren(CONFIG, MEETING) as Array<Record<string, unknown>>;
 
     expect(children[0]?.type).toBe("heading_2");
     expect(children[1]?.type).toBe("paragraph");
@@ -113,5 +112,32 @@ describe("buildMeetingProperties", () => {
       ((children[3]?.paragraph as { rich_text?: Array<{ text?: { link?: { url?: string } } }> }).rich_text?.[0]?.text
         ?.link?.url ?? null),
     ).toBe("https://outlook.example/event");
+  });
+
+  it("supports omitting generated notes and action items sections when the template already has them", () => {
+    const children = buildMeetingChildren(
+      {
+        ...CONFIG,
+        notion: {
+          ...CONFIG.notion,
+          pageContent: {
+            sections: ["meeting_link", "calendar_event", "meeting_details"],
+          },
+        },
+      },
+      MEETING,
+    ) as Array<Record<string, unknown>>;
+
+    expect(children).toHaveLength(6);
+    expect(
+      children.some(
+        (child) =>
+          child.type === "heading_2" &&
+          ((child.heading_2 as { rich_text?: Array<{ text?: { content?: string } }> } | undefined)?.rich_text?.[0]?.text
+            ?.content === "Notes" ||
+            (child.heading_2 as { rich_text?: Array<{ text?: { content?: string } }> } | undefined)?.rich_text?.[0]?.text
+              ?.content === "Action items"),
+      ),
+    ).toBe(false);
   });
 });

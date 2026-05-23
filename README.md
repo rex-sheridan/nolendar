@@ -180,6 +180,13 @@ sync:
   - `template_id`
 - `notion.dataSourceTemplate.templateId` is required when `type` is `template_id`
 - `notion.dataSourceTemplate.timezone` is optional and controls timezone-sensitive template variables like `@now` and `@today`
+- `notion.pageContent.sections` controls which generated body sections Nolendar appends to new pages
+- supported `notion.pageContent.sections` values are:
+  - `meeting_link`
+  - `calendar_event`
+  - `meeting_details`
+  - `notes`
+  - `action_items`
 - `notion.peopleDataSource` can be configured when you want attendee rows created or linked from a separate Notion People data source
 - `notion.peopleDataSource.nameProperty` defaults to `Name`
 - `notion.peopleDataSource.emailProperty` defaults to `Email Address`
@@ -241,6 +248,20 @@ notion:
     type: template_id
     templateId: a5da15f6-b853-455d-8827-f906fb52db2b
     timezone: America/New_York
+```
+
+If your Notion template already contains sections like `Notes` and `Action items`, configure Nolendar to append only the meeting metadata sections:
+
+```yaml
+notion:
+  databaseId: your_notion_data_source_id
+  dataSourceTemplate:
+    type: default
+  pageContent:
+    sections:
+      - meeting_link
+      - calendar_event
+      - meeting_details
 ```
 
 ### Required Notion Properties
@@ -305,11 +326,13 @@ Participants behavior:
 Current Notion page body content includes:
 
 - copied template page blocks first when `notion.templatePageId` is configured
-- a `Meeting Link` section when a meeting join URL is available
-- a `Calendar Event` section when the Outlook `webLink` is available
-- a `Meeting Details` section populated from the event body text
-- `Notes`
-- `Action items`
+- the configured generated sections from `notion.pageContent.sections`
+- by default this includes:
+  - a `Meeting Link` section when a meeting join URL is available
+  - a `Calendar Event` section when the Outlook `webLink` is available
+  - a `Meeting Details` section populated from the event body text
+  - `Notes`
+  - `Action items`
 
 Example:
 
@@ -657,6 +680,12 @@ Override the lookahead window:
 npm run dev -- list --config nolendar.yml --lookahead 5d
 ```
 
+Show Microsoft Graph API timings while listing meetings:
+
+```bash
+npm run dev -- list --config nolendar.yml --lookahead 5d --timings
+```
+
 Validate the target Notion data source:
 
 ```bash
@@ -673,6 +702,13 @@ Create missing required Notion properties when possible:
 
 ```bash
 npm run dev -- validate-notion --config nolendar.yml --ensure-properties
+```
+
+Show Notion API timings during validation or schema inspection:
+
+```bash
+npm run dev -- validate-notion --config nolendar.yml --timings
+npm run dev -- print-notion-schema --config nolendar.yml --timings
 ```
 
 Preview sync actions without changing Notion:
@@ -693,12 +729,24 @@ Force-update already-synced pages even when the stored Outlook `changeKey` match
 npm run dev -- sync --config nolendar.yml --force-update
 ```
 
+Show both Microsoft Graph and Notion API timings during sync:
+
+```bash
+npm run dev -- sync --config nolendar.yml --force-update --timings
+```
+
 Incremental sync notes:
 
 - `sync` now persists per-calendar delta links under `sync.statePath`
 - stored delta links are only reused when the saved calendar window exactly matches the current resolved window
 - in practice, `today` benefits the most because repeated runs on the same UTC day resolve to the same window
 - if the window changes, Nolendar falls back to a fresh calendar-view delta bootstrap for that calendar
+
+Timing output notes:
+
+- `--timings` prints one line per outbound Microsoft Graph or Notion API call
+- each line includes the service, operation, status, and elapsed duration in milliseconds
+- timing lines are intended for diagnostics and performance debugging
 
 Or build the project and run the compiled CLI:
 

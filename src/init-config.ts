@@ -23,6 +23,13 @@ notion:
   pageIcon:
     type: emoji
     emoji: "📝"
+  pageContent:
+    sections:
+      - meeting_link
+      - calendar_event
+      - meeting_details
+      - notes
+      - action_items
 
 calendars:
   - id: primary

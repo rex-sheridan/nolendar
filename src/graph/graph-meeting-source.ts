@@ -2,6 +2,7 @@ import type { CalendarConfig } from "../domain/config.js";
 import type { GraphEvent } from "../domain/graph.js";
 import type { Meeting } from "../domain/meeting.js";
 import type { CalendarWindow, MeetingSource } from "../list.js";
+import type { ApiTimingReporter } from "../api-timing.js";
 import type { AccessTokenProvider } from "./device-code-token-provider.js";
 
 const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
@@ -13,12 +14,19 @@ export class GraphMeetingSource implements MeetingSource {
   constructor(
     private readonly accessTokenProvider: AccessTokenProvider,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly timingReporter?: ApiTimingReporter,
   ) {}
 
   async listMeetings(args: { calendar: CalendarConfig; window: CalendarWindow }): Promise<Meeting[]> {
     const accessToken = await this.accessTokenProvider.getAccessToken();
     const currentUserEmail = await this.getCurrentUserEmail(accessToken);
-    const payload = await fetchGraphPayload(this.fetchImpl, buildCalendarViewUrl(args.calendar.id, args.window), accessToken);
+    const payload = await fetchGraphPayload(
+      this.fetchImpl,
+      buildCalendarViewUrl(args.calendar.id, args.window),
+      accessToken,
+      {},
+      this.timingReporter,
+    );
 
     return (payload.value ?? [])
       .filter(isSyncableCalendarViewEvent)
@@ -42,7 +50,7 @@ export class GraphMeetingSource implements MeetingSource {
     while (nextUrl) {
       const payload = await fetchGraphPayload(this.fetchImpl, nextUrl, accessToken, {
         maxPageSize: 100,
-      });
+      }, this.timingReporter);
       const events = payload.value ?? [];
 
       for (const event of events) {
@@ -84,6 +92,8 @@ export class GraphMeetingSource implements MeetingSource {
       this.fetchImpl,
       buildEventUrl(calendarId, eventId),
       accessToken,
+      {},
+      this.timingReporter,
     );
     const hydratedEvent = payload.value?.[0] ?? payload;
 
@@ -94,7 +104,7 @@ export class GraphMeetingSource implements MeetingSource {
   }
 
   private async getCurrentUserEmail(accessToken: string): Promise<string | undefined> {
-    this.currentUserEmailPromise ??= fetchCurrentUserEmail(this.fetchImpl, accessToken);
+    this.currentUserEmailPromise ??= fetchCurrentUserEmail(this.fetchImpl, accessToken, this.timingReporter);
     return this.currentUserEmailPromise;
   }
 }
@@ -136,12 +146,14 @@ async function fetchGraphPayload(
   options: {
     maxPageSize?: number;
   } = {},
+  timingReporter?: ApiTimingReporter,
 ): Promise<{ value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string }> {
   return fetchGraphObject<{ value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string }>(
     fetchImpl,
     url,
     accessToken,
     options,
+    timingReporter,
   );
 }
 
@@ -152,6 +164,7 @@ async function fetchGraphObject<T>(
   options: {
     maxPageSize?: number;
   } = {},
+  timingReporter?: ApiTimingReporter,
 ): Promise<T> {
   const preferHeaders = ['outlook.timezone="UTC"'];
 
@@ -160,12 +173,19 @@ async function fetchGraphObject<T>(
   }
 
   for (let attempt = 0; attempt <= MAX_THROTTLE_RETRIES; attempt += 1) {
+    const startedAt = Date.now();
     const response = await fetchImpl(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
         Prefer: preferHeaders.join(", "),
       },
+    });
+    timingReporter?.record({
+      service: "graph",
+      operation: `GET ${url.pathname}${url.search}`,
+      status: String(response.status),
+      durationMs: Date.now() - startedAt,
     });
 
     if (response.ok) {
@@ -212,11 +232,17 @@ function isSyncableCalendarViewEvent(event: GraphEvent): boolean {
   return event.type !== "seriesMaster";
 }
 
-async function fetchCurrentUserEmail(fetchImpl: typeof fetch, accessToken: string): Promise<string | undefined> {
+async function fetchCurrentUserEmail(
+  fetchImpl: typeof fetch,
+  accessToken: string,
+  timingReporter?: ApiTimingReporter,
+): Promise<string | undefined> {
   const response = await fetchGraphObject<{ mail?: string | null; userPrincipalName?: string | null }>(
     fetchImpl,
     buildCurrentUserUrl(),
     accessToken,
+    {},
+    timingReporter,
   );
   const email = response.mail?.trim() || response.userPrincipalName?.trim();
   return email ? email.toLowerCase() : undefined;
