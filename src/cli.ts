@@ -10,6 +10,7 @@ import { InteractiveBrowserTokenProvider } from "./graph/interactive-browser-tok
 import { StaticAccessTokenProvider } from "./graph/static-access-token-provider.js";
 import type { LookaheadWindow } from "./domain/config.js";
 import { listMeetings } from "./list.js";
+import { isValidLookaheadWindow } from "./lookahead.js";
 import { formatMeeting } from "./meeting-format.js";
 import { writeDefaultConfig } from "./init-config.js";
 import { resolveNotionAuthToken } from "./notion/auth.js";
@@ -146,11 +147,11 @@ function resolveLookahead(configLookahead: LookaheadWindow, cliLookahead?: strin
     return configLookahead;
   }
 
-  if (cliLookahead === "today" || cliLookahead === "24h" || cliLookahead === "7d") {
+  if (isValidLookaheadWindow(cliLookahead)) {
     return cliLookahead;
   }
 
-  throw new Error("`--lookahead` must be one of: today, 24h, 7d.");
+  throw new Error("`--lookahead` must be `today` or a relative range like `12h`, `5d`, `2w`, or `3m`.");
 }
 
 function defaultDeps(): CliDependencies {

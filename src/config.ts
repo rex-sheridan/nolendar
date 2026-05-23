@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 
+import { isValidLookaheadWindow } from "./lookahead.js";
 import type {
   CalendarConfig,
   FiltersConfig,
@@ -11,8 +12,6 @@ import type {
   NolendarConfig,
   NotionConfig,
 } from "./domain/config.js";
-
-const VALID_LOOKAHEADS: ReadonlySet<LookaheadWindow> = new Set(["today", "24h", "7d"]);
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -161,11 +160,11 @@ function normalizeLookahead(value: unknown): LookaheadWindow {
     return "today";
   }
 
-  if (typeof lookahead !== "string" || !VALID_LOOKAHEADS.has(lookahead as LookaheadWindow)) {
-    throw new ConfigError("`sync.lookahead` must be one of: today, 24h, 7d.");
+  if (typeof lookahead !== "string" || !isValidLookaheadWindow(lookahead)) {
+    throw new ConfigError("`sync.lookahead` must be `today` or a relative range like `12h`, `5d`, `2w`, or `3m`.");
   }
 
-  return lookahead as LookaheadWindow;
+  return lookahead;
 }
 
 function normalizeStatePath(value: unknown, configPath: string): string {

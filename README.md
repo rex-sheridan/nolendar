@@ -18,8 +18,7 @@ Implemented now:
 - Multi-calendar meeting listing
 - Configurable lookahead windows:
   - `today`
-  - `24h`
-  - `7d`
+  - quantity-based relative ranges like `12h`, `5d`, `2w`, and `3m`
 - Normalized meeting output for CLI display
 - Notion schema validation for required properties
 - Optional creation of missing required Notion properties
@@ -142,6 +141,12 @@ sync:
 - with the current Notion API model, this value should be the target data source ID used for row queries and page creation
 - `calendars` must contain at least one calendar
 - `sync.lookahead` defaults to `today`
+- `sync.lookahead` also accepts relative ranges with a numeric prefix:
+  - `h` for hours
+  - `d` for days
+  - `w` for weeks
+  - `m` for months
+  - examples: `12h`, `5d`, `2w`, `3m`
 - `sync.statePath` defaults to `.nolendar/state.json`, resolved relative to the config file
 - mapping defaults are:
   - `Name`
@@ -162,11 +167,13 @@ If these properties are missing, you can either create them yourself or use `--e
 
 ## Environment Variables
 
-Microsoft Graph auth always requires:
+Microsoft Graph auth may use:
 
 ```bash
 export MICROSOFT_CLIENT_ID=your_app_registration_client_id
 ```
+
+For `device_code` and `interactive_browser`, `MICROSOFT_CLIENT_ID` is optional. If omitted, Nolendar falls back to Azure Identity's development application.
 
 For `microsoft.authMode: auth_code`, you also need:
 
@@ -403,7 +410,7 @@ npm run dev -- list --config nolendar.yml
 Override the lookahead window:
 
 ```bash
-npm run dev -- list --config nolendar.yml --lookahead 24h
+npm run dev -- list --config nolendar.yml --lookahead 5d
 ```
 
 Validate the target Notion data source:

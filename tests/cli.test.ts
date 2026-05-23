@@ -19,7 +19,7 @@ describe("cli", () => {
     const stderr = { error: vi.fn() };
 
     const exitCode = await runCli(
-      ["node", "nolendar", "list", "--config", "tests/fixtures/valid-config.yml", "--lookahead", "30d"],
+      ["node", "nolendar", "list", "--config", "tests/fixtures/valid-config.yml", "--lookahead", "30x"],
       {
         stdout,
         stderr,
@@ -27,7 +27,9 @@ describe("cli", () => {
     );
 
     expect(exitCode).toBe(1);
-    expect(stderr.error).toHaveBeenCalledWith("`--lookahead` must be one of: today, 24h, 7d.");
+    expect(stderr.error).toHaveBeenCalledWith(
+      "`--lookahead` must be `today` or a relative range like `12h`, `5d`, `2w`, or `3m`.",
+    );
   });
 
   it("returns a non-zero exit code when list cannot authenticate", async () => {

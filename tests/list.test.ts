@@ -59,10 +59,24 @@ describe("resolveWindow", () => {
     });
   });
 
-  it("uses a rolling 7 day window", () => {
-    expect(resolveWindow("7d", clock)).toEqual({
+  it("uses a rolling multi-day window", () => {
+    expect(resolveWindow("5d", clock)).toEqual({
       start: "2026-05-22T15:30:00.000Z",
-      end: "2026-05-29T15:30:00.000Z",
+      end: "2026-05-27T15:30:00.000Z",
+    });
+  });
+
+  it("uses a rolling multi-week window", () => {
+    expect(resolveWindow("2w", clock)).toEqual({
+      start: "2026-05-22T15:30:00.000Z",
+      end: "2026-06-05T15:30:00.000Z",
+    });
+  });
+
+  it("uses a rolling month window", () => {
+    expect(resolveWindow("3m", clock)).toEqual({
+      start: "2026-05-22T15:30:00.000Z",
+      end: "2026-08-22T15:30:00.000Z",
     });
   });
 });

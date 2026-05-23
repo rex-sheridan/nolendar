@@ -48,6 +48,24 @@ describe("normalizeConfig", () => {
     expect(config.sync.statePath).toBe("/Users/rex/workspace/nolendar/config/data/state.json");
   });
 
+  it("accepts relative lookahead windows", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+      },
+      calendars: [
+        {
+          id: "team",
+        },
+      ],
+      sync: {
+        lookahead: "5d",
+      },
+    });
+
+    expect(config.sync.lookahead).toBe("5d");
+  });
+
   it("rejects an invalid lookahead window", () => {
     expect(() =>
       normalizeConfig({
@@ -60,10 +78,12 @@ describe("normalizeConfig", () => {
           },
         ],
         sync: {
-          lookahead: "30d",
+          lookahead: "30x",
         },
       }),
-    ).toThrowError(new ConfigError("`sync.lookahead` must be one of: today, 24h, 7d."));
+    ).toThrowError(
+      new ConfigError("`sync.lookahead` must be `today` or a relative range like `12h`, `5d`, `2w`, or `3m`."),
+    );
   });
 
   it("rejects missing notion database id", () => {

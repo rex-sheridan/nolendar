@@ -2,6 +2,7 @@ import type { CalendarConfig, LookaheadWindow, NolendarConfig } from "./domain/c
 import type { Meeting } from "./domain/meeting.js";
 import type { Clock } from "./clock.js";
 import { systemClock } from "./clock.js";
+import { parseRelativeLookahead } from "./lookahead.js";
 
 export interface CalendarWindow {
   start: string;
@@ -53,22 +54,33 @@ export async function listMeetings(
 export function resolveWindow(lookahead: LookaheadWindow, clock: Clock = systemClock): CalendarWindow {
   const now = clock.now();
   const start = new Date(now);
-  let end: Date;
+  let end = new Date(start);
 
-  switch (lookahead) {
-    case "today": {
-      start.setUTCHours(0, 0, 0, 0);
-      end = new Date(start);
-      end.setUTCDate(end.getUTCDate() + 1);
-      break;
+  if (lookahead === "today") {
+    start.setUTCHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+  } else {
+    const relative = parseRelativeLookahead(lookahead);
+
+    if (!relative) {
+      throw new Error(`Invalid relative lookahead: ${lookahead}`);
     }
-    case "24h": {
-      end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-      break;
-    }
-    case "7d": {
-      end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
-      break;
+
+    switch (relative.unit) {
+      case "h":
+        end = new Date(start.getTime() + relative.quantity * 60 * 60 * 1000);
+        break;
+      case "d":
+        end = new Date(start.getTime() + relative.quantity * 24 * 60 * 60 * 1000);
+        break;
+      case "w":
+        end = new Date(start.getTime() + relative.quantity * 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "m":
+        end = new Date(start);
+        end.setUTCMonth(end.getUTCMonth() + relative.quantity);
+        break;
     }
   }
 

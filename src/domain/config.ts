@@ -1,6 +1,6 @@
 export type MicrosoftAuthMode = "device_code" | "interactive_browser" | "auth_code";
 
-export type LookaheadWindow = "today" | "24h" | "7d";
+export type LookaheadWindow = "today" | `${number}${"h" | "d" | "w" | "m"}`;
 
 export interface MicrosoftConfig {
   tenant: "common" | "organizations" | "consumers";
