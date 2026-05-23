@@ -479,6 +479,157 @@ describe("GraphMeetingSource", () => {
     expect(result.removedEventIds).toEqual(["evt-removed"]);
   });
 
+  it("keeps only the latest delta state for a moved recurring occurrence", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ mail: "owner@example.com" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "occ-1",
+                changeKey: "ck-old",
+                subject: "Weekly Sync",
+                type: "occurrence",
+                start: {
+                  dateTime: "2026-05-22T10:00:00.0000000",
+                  timeZone: "UTC",
+                },
+                end: {
+                  dateTime: "2026-05-22T11:00:00.0000000",
+                  timeZone: "UTC",
+                },
+              },
+            ],
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$skiptoken=page-2",
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "occ-1",
+                changeKey: "ck-new",
+                subject: "Weekly Sync - moved",
+                type: "exception",
+                start: {
+                  dateTime: "2026-05-22T12:00:00.0000000",
+                  timeZone: "UTC",
+                },
+                end: {
+                  dateTime: "2026-05-22T13:00:00.0000000",
+                  timeZone: "UTC",
+                },
+              },
+            ],
+            "@odata.deltaLink": "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$deltatoken=done",
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const result = await source.listMeetingChanges({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    expect(result.meetings).toHaveLength(1);
+    expect(result.meetings[0]).toEqual(
+      expect.objectContaining({
+        id: "occ-1",
+        changeKey: "ck-new",
+        title: "Weekly Sync - moved",
+        start: "2026-05-22T12:00:00.000Z",
+        isRecurring: true,
+      }),
+    );
+  });
+
+  it("prefers removal when a recurring occurrence is updated and then removed in the same delta batch", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          value: [
+            {
+              id: "occ-1",
+              changeKey: "ck-new",
+              subject: "Weekly Sync",
+              type: "occurrence",
+              start: {
+                dateTime: "2026-05-22T10:00:00.0000000",
+                timeZone: "UTC",
+              },
+              end: {
+                dateTime: "2026-05-22T11:00:00.0000000",
+                timeZone: "UTC",
+              },
+            },
+            {
+              id: "occ-1",
+              "@removed": {
+                reason: "deleted",
+              },
+            },
+          ],
+          "@odata.deltaLink": "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$deltatoken=done",
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const result = await source.listMeetingChanges({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    expect(result.meetings).toEqual([]);
+    expect(result.removedEventIds).toEqual(["occ-1"]);
+  });
+
   it("hydrates partial delta events before normalizing them", async () => {
     const fetchMock = vi
       .fn()

@@ -28,6 +28,10 @@ Implemented now:
 - Two template modes for new meeting pages:
   - copied page blocks from `notion.templatePageId`
   - native Notion data source templates via `notion.dataSourceTemplate`
+- Recurrence-safe sync behavior for:
+  - separate recurring occurrences by event ID
+  - recurring exceptions and moved instances
+  - cancelled recurring instances
 - Sync filtering for:
   - declined meetings
   - minimum meeting duration
@@ -41,7 +45,7 @@ Implemented now:
 
 Planned next:
 
-- Broader recurring-meeting edge-case hardening
+- Auth/runtime polish and optional MCP integration
 
 ## Planned Features
 
@@ -754,14 +758,15 @@ The current sync implementation:
 - skips creating brand-new pages for cancelled meetings
 - creates new pages when no matching event ID is found
 - archives matching Notion pages when Graph delta reports deleted events
+- collapses multiple delta changes for the same recurring occurrence to the latest final state before sync
 - persists delta state only after a successful non-dry-run sync
 
 ### Current Sync Limitations
 
 Not implemented yet:
 
-- broader recurring meeting edge-case hardening for moved/cancelled instances across all series changes
 - MCP-based Notion integration
+- additional auth/token-cache hardening and helper commands
 
 ## Idempotency
 

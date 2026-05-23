@@ -35,8 +35,8 @@ export class GraphMeetingSource implements MeetingSource {
     let nextUrl: URL | undefined = args.deltaLink
       ? new URL(args.deltaLink)
       : buildCalendarViewDeltaUrl(args.calendar.id, args.window);
-    const meetings: Meeting[] = [];
-    const removedEventIds: string[] = [];
+    const meetingsById = new Map<string, Meeting>();
+    const removedEventIds = new Set<string>();
     let deltaLink: string | undefined;
 
     while (nextUrl) {
@@ -48,7 +48,8 @@ export class GraphMeetingSource implements MeetingSource {
       for (const event of events) {
         if (event["@removed"] != null) {
           if (event.id) {
-            removedEventIds.push(event.id);
+            removedEventIds.add(event.id);
+            meetingsById.delete(event.id);
           }
           continue;
         }
@@ -58,15 +59,17 @@ export class GraphMeetingSource implements MeetingSource {
         }
 
         const hydratedEvent = await this.hydrateGraphEvent(args.calendar.id, event, accessToken);
-        meetings.push(normalizeGraphEvent(hydratedEvent, args.calendar, { currentUserEmail }));
+        const meeting = normalizeGraphEvent(hydratedEvent, args.calendar, { currentUserEmail });
+        removedEventIds.delete(meeting.id);
+        meetingsById.set(meeting.id, meeting);
       }
       nextUrl = payload["@odata.nextLink"] ? new URL(payload["@odata.nextLink"]) : undefined;
       deltaLink = payload["@odata.deltaLink"] ?? deltaLink;
     }
 
     return {
-      meetings,
-      removedEventIds,
+      meetings: Array.from(meetingsById.values()),
+      removedEventIds: Array.from(removedEventIds),
       deltaLink,
     };
   }

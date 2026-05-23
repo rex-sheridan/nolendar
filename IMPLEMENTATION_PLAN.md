@@ -422,13 +422,14 @@ Current scope:
 - Cancelled event behavior
 
 Status:
-- In progress
+- Complete
 
 Current scope:
 - deleted delta events are handled by archiving the matching Notion pages
 - `seriesMaster` items are ignored so they do not create duplicate meeting pages
-- recurring exceptions and cancelled instances are the primary remaining correctness work
-- initial handling for cancelled events should archive existing pages and avoid creating new cancelled meeting pages
+- recurring occurrences sync independently by occurrence event ID
+- recurring exceptions and moved instances collapse to their latest delta state before sync
+- cancelled events archive existing pages and do not create new pages when they were never previously synced
 
 ### Milestone 6: Remaining Product Features
 

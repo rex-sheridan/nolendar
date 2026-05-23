@@ -58,6 +58,55 @@ const MEETING: Meeting = {
 };
 
 describe("syncMeetingsToNotion", () => {
+  it("treats recurring occurrences as separate syncable meetings by event id", async () => {
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
+          Assignee: { id: "assignee", name: "Assignee", type: "people" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => "user-1"),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => null),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+    };
+
+    const result = await syncMeetingsToNotion(
+      CONFIG,
+      [
+        {
+          ...MEETING,
+          id: "occ-1",
+          title: "Weekly Sync",
+          isRecurring: true,
+        },
+        {
+          ...MEETING,
+          id: "occ-2",
+          title: "Weekly Sync",
+          start: "2026-05-29T13:00:00.000Z",
+          end: "2026-05-29T14:00:00.000Z",
+          isRecurring: true,
+        },
+      ],
+      notion,
+    );
+
+    expect(result.created).toBe(2);
+    expect(notion.createMeetingPage).toHaveBeenCalledTimes(2);
+  });
+
   it("creates a page for an unseen meeting", async () => {
     const notion = {
       retrieveDataSource: vi.fn(async () => ({
