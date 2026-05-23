@@ -76,6 +76,7 @@ describe("syncCalendarChangesToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
     const loadState = vi.fn(async () => ({
       version: 1 as const,
@@ -154,6 +155,7 @@ describe("syncCalendarChangesToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     await syncCalendarChangesToNotion(CONFIG, notion, {
@@ -209,6 +211,7 @@ describe("syncCalendarChangesToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     await syncCalendarChangesToNotion(CONFIG, notion, {
@@ -257,6 +260,7 @@ describe("syncCalendarChangesToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncCalendarChangesToNotion(CONFIG, notion, {
@@ -315,6 +319,7 @@ describe("syncCalendarChangesToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     await syncCalendarChangesToNotion(config, notion, {
@@ -369,6 +374,7 @@ describe("syncCalendarChangesToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncCalendarChangesToNotion(CONFIG, notion, {

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { NolendarConfig } from "../src/domain/config.js";
+import type { Meeting } from "../src/domain/meeting.js";
 import { ApiNotionClient } from "../src/notion/api-notion-client.js";
 
 describe("ApiNotionClient.getDefaultAssigneeUserId", () => {
@@ -93,7 +95,11 @@ describe("ApiNotionClient page icon writes", () => {
         blocks: {
           children: {
             append: vi.fn(async () => undefined),
-            list: vi.fn(),
+            list: vi.fn(async () => ({
+              results: [],
+              has_more: false,
+              next_cursor: null,
+            })),
           },
         },
         dataSources: {
@@ -166,39 +172,24 @@ describe("ApiNotionClient page icon writes", () => {
     );
   });
 
-  it("labels template readiness polling distinctly in timing output", async () => {
+  it("finalizes native Notion template pages by appending generated meeting blocks once", async () => {
     const timingReporter = {
       record: vi.fn(),
+    };
+    const blocks = {
+      children: {
+        append: vi.fn(async () => undefined),
+        list: vi.fn(async () => ({
+          results: [],
+          has_more: false,
+          next_cursor: null,
+        })),
+      },
     };
     const client = new ApiNotionClient(
       "token",
       {
-        blocks: {
-          children: {
-            append: vi.fn(async () => undefined),
-            list: vi
-              .fn()
-              .mockResolvedValueOnce({
-                results: [],
-                has_more: false,
-                next_cursor: null,
-              })
-              .mockResolvedValueOnce({
-                results: [
-                  {
-                    id: "template-block-1",
-                    object: "block",
-                    type: "paragraph",
-                    paragraph: {
-                      rich_text: [],
-                    },
-                  },
-                ],
-                has_more: false,
-                next_cursor: null,
-              }),
-          },
-        },
+        blocks,
         dataSources: {
           retrieve: vi.fn(),
           update: vi.fn(),
@@ -216,67 +207,74 @@ describe("ApiNotionClient page icon writes", () => {
       timingReporter,
     );
 
-    await client.createMeetingPage({
-      config: {
-        microsoft: { tenant: "common", authMode: "device_code" },
-        notion: {
-          databaseId: "data-source-id",
-          dataSourceTemplate: {
-            type: "default",
-          },
-        },
-        calendars: [],
-        filters: {
-          ignoreDeclined: true,
-          requireAttendees: false,
-          ignorePersonal: false,
-          ignoreOptionalAttendance: false,
-        },
-        mapping: {
-          title: "Name",
-          due: "Due",
-          eventId: "Outlook Event ID",
-          changeKey: "Outlook ChangeKey",
-        },
-        sync: {
-          lookahead: "today",
-          statePath: "/tmp/.nolendar/state.json",
+    const config: NolendarConfig = {
+      microsoft: { tenant: "common", authMode: "device_code" },
+      notion: {
+        databaseId: "data-source-id",
+        dataSourceTemplate: {
+          type: "default",
         },
       },
-      dataSource: {
-        id: "data-source-id",
-        properties: {
-          Name: { id: "title", name: "Name", type: "title" },
-          Due: { id: "due", name: "Due", type: "date" },
-          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
-          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
-        },
+      calendars: [],
+      filters: {
+        ignoreDeclined: true,
+        requireAttendees: false,
+        ignorePersonal: false,
+        ignoreOptionalAttendance: false,
       },
-      meeting: {
-        id: "evt-1",
-        changeKey: "ck-1",
-        calendarId: "primary",
-        title: "Planning",
-        start: "2026-05-22T13:00:00.000Z",
-        end: "2026-05-22T14:00:00.000Z",
-        attendees: [],
-        isCancelled: false,
-        isRecurring: false,
+      mapping: {
+        title: "Name",
+        due: "Due",
+        eventId: "Outlook Event ID",
+        changeKey: "Outlook ChangeKey",
       },
+      sync: {
+        lookahead: "today",
+        statePath: "/tmp/.nolendar/state.json",
+      },
+    };
+    const dataSource = {
+      id: "data-source-id",
+      properties: {
+        Name: { id: "title", name: "Name", type: "title" },
+        Due: { id: "due", name: "Due", type: "date" },
+        "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+        "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+      },
+    } as const;
+    const meeting: Meeting = {
+      id: "evt-1",
+      changeKey: "ck-1",
+      calendarId: "primary",
+      title: "Planning",
+      start: "2026-05-22T13:00:00.000Z",
+      end: "2026-05-22T14:00:00.000Z",
+      attendees: [],
+      isCancelled: false,
+      isRecurring: false,
+    };
+
+    await client.finalizeMeetingPageContent({
+      pageId: "page-1",
+      config,
+      dataSource,
+      meeting,
     });
 
+    expect(blocks.children.append).toHaveBeenCalledWith({
+      block_id: "page-1",
+      children: expect.any(Array),
+    });
+    expect(blocks.children.list).toHaveBeenCalledWith({
+      block_id: "page-1",
+      start_cursor: undefined,
+      page_size: 100,
+    });
     expect(timingReporter.record).toHaveBeenCalledWith(
       expect.objectContaining({
         service: "notion",
-        operation: "blocks.children.list",
-        detail: "block_id=page-1 purpose=template_ready_poll poll=1 start_cursor=- page_size=100",
-      }),
-    );
-    expect(timingReporter.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        service: "notion",
-        operation: "blocks.children.list",
-        detail: "block_id=page-1 purpose=template_ready_poll poll=2 start_cursor=- page_size=100",
+        operation: "blocks.children.append",
+        detail: "block_id=page-1 children=4",
       }),
     );
   });
@@ -730,24 +728,11 @@ describe("ApiNotionClient page icon writes", () => {
     });
   });
 
-  it("uses the default Notion data source template and appends generated meeting blocks after create", async () => {
+  it("uses the default Notion data source template and defers generated meeting blocks until finalization", async () => {
     const blocks = {
       children: {
         append: vi.fn(async () => undefined),
-        list: vi.fn(async () => ({
-          results: [
-            {
-              id: "template-block-1",
-              object: "block",
-              type: "paragraph",
-              paragraph: {
-                rich_text: [],
-              },
-            },
-          ],
-          has_more: false,
-          next_cursor: null,
-        })),
+        list: vi.fn(),
       },
     };
     const pages = {
@@ -831,34 +816,14 @@ describe("ApiNotionClient page icon writes", () => {
         children: undefined,
       }),
     );
-    expect(blocks.children.append).toHaveBeenCalledWith({
-      block_id: "page-1",
-      children: expect.arrayContaining([
-        expect.objectContaining({
-          type: "heading_2",
-        }),
-      ]),
-    });
+    expect(blocks.children.append).not.toHaveBeenCalled();
   });
 
   it("uses a specific Notion data source template id when configured", async () => {
     const blocks = {
       children: {
         append: vi.fn(async () => undefined),
-        list: vi.fn(async () => ({
-          results: [
-            {
-              id: "template-block-1",
-              object: "block",
-              type: "paragraph",
-              paragraph: {
-                rich_text: [],
-              },
-            },
-          ],
-          has_more: false,
-          next_cursor: null,
-        })),
+        list: vi.fn(),
       },
     };
     const pages = {
@@ -939,9 +904,6 @@ describe("ApiNotionClient page icon writes", () => {
         },
       }),
     );
-    expect(blocks.children.append).toHaveBeenCalledWith({
-      block_id: "page-1",
-      children: expect.any(Array),
-    });
+    expect(blocks.children.append).not.toHaveBeenCalled();
   });
 });

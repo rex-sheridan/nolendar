@@ -14,6 +14,7 @@ import { listMeetings } from "./list.js";
 import { isValidLookaheadWindow } from "./lookahead.js";
 import { formatMeeting } from "./meeting-format.js";
 import { writeDefaultConfig } from "./init-config.js";
+import { finalizeTemplatedMeetingPages } from "./finalize-templates.js";
 import { resolveNotionAuthToken } from "./notion/auth.js";
 import { ApiNotionClient } from "./notion/api-notion-client.js";
 import { validateNotionSchema } from "./notion/schema.js";
@@ -130,6 +131,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--dry-run", "Preview sync actions without changing Notion", false)
     .option("--ensure-properties", "Create missing required properties if possible", false)
     .option("--force-update", "Update matching Notion pages even when the Outlook changeKey is unchanged", false)
+    .option("--finalize-delay-ms <ms>", "Delay in milliseconds before the native-template finalize pass", "3000")
     .option("--timings", "Print API call timings", false)
     .action(
       async (options: {
@@ -138,10 +140,13 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         dryRun: boolean;
         ensureProperties: boolean;
         forceUpdate: boolean;
+        finalizeDelayMs: string;
         timings: boolean;
       }) => {
+      const startedAt = Date.now();
       const config = await loadConfigFn(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
+      const finalizeDelayMs = parseDelayMs(options.finalizeDelayMs);
       const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
       const meetingSource = buildGraphMeetingSource(config, deps, timingReporter);
       const notion = buildNotionClientFn({
@@ -166,9 +171,45 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         },
       );
 
+      if (config.notion.dataSourceTemplate && !options.dryRun) {
+        await sleep(finalizeDelayMs);
+        const meetingsResult = await listMeetings(config, lookahead, { meetingSource });
+        await finalizeTemplatedMeetingPages(config, meetingsResult.meetings, notion, {
+          ensureProperties: options.ensureProperties,
+        });
+      }
+
       deps.stdout.log(
-        `Sync summary: created=${syncResult.created}, updated=${syncResult.updated}, archived=${syncResult.archived}, skipped=${syncResult.skipped}, filtered=${syncResult.filtered}, dryRun=${syncResult.dryRun}`,
+        `Sync summary: created=${syncResult.created}, updated=${syncResult.updated}, archived=${syncResult.archived}, skipped=${syncResult.skipped}, filtered=${syncResult.filtered}, dryRun=${syncResult.dryRun}, elapsedMs=${Date.now() - startedAt}`,
       );
+      },
+    );
+
+  program
+    .command("finalize-templates")
+    .description("Append Nolendar meeting content to pages created from native Notion data source templates.")
+    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("--lookahead <window>", "One of: today, 24h, 7d")
+    .option("--ensure-properties", "Create missing required properties if possible", false)
+    .option("--timings", "Print API call timings", false)
+    .action(
+      async (options: {
+        config: string;
+        lookahead?: string;
+        ensureProperties: boolean;
+        timings: boolean;
+      }) => {
+        const config = await loadConfigFn(options.config);
+        const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
+        const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+        const meetingSource = buildGraphMeetingSource(config, deps, timingReporter);
+        const notion = buildNotionClientFn({
+          timingReporter,
+        });
+        const meetingsResult = await listMeetings(config, lookahead, { meetingSource });
+        await finalizeTemplatedMeetingPages(config, meetingsResult.meetings, notion, {
+          ensureProperties: options.ensureProperties,
+        });
       },
     );
 
@@ -247,6 +288,20 @@ function formatSchemaOutput(
 
 function createTimingReporter(deps: CliDependencies): ApiTimingReporter {
   return createConsoleTimingReporter(deps.timingSink ?? deps.stdout);
+}
+
+function parseDelayMs(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("`--finalize-delay-ms` must be a non-negative integer.");
+  }
+
+  return parsed;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildGraphMeetingSource(

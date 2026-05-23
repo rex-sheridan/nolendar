@@ -223,7 +223,8 @@ Nolendar supports two separate ways to start new meeting pages with reusable con
   - this is useful when you want a simple reusable page body without using Notion's data source template mechanism
 - `notion.dataSourceTemplate`
   - uses Notion's native data source template support during page creation
-  - Nolendar waits briefly for the template to apply, then appends its generated meeting sections
+  - Nolendar creates the page during `sync`, then appends its generated meeting sections later in the same `sync` invocation after a short delay
+  - `finalize-templates` remains available as a manual fallback if you want to rerun finalization separately
   - this is the right option when you want a real Notion template from the data source's `New` menu
 
 Examples:
@@ -288,6 +289,7 @@ Notes:
 
 - `--ensure-properties` only applies to auto-creatable properties on the meeting data source
 - the `Participants` relation must be created in Notion manually and point to the configured People data source
+- when `notion.dataSourceTemplate` is configured, Nolendar finalizes generated meeting content by inspecting page headings rather than requiring an extra internal property
 
 To inspect exactly what Nolendar sees from Notion, run:
 
@@ -312,6 +314,7 @@ Current Notion page creation supports:
 - participants from Outlook attendees when `mapping.participants` and `notion.peopleDataSource` are configured
 - static page icons via `notion.pageIcon`
 - template page blocks from `notion.templatePageId` when configured
+- deferred finalization for native `notion.dataSourceTemplate` pages using page-content detection
 - meeting body content from the full Outlook event body when available, otherwise `bodyPreview`
 - Teams join link extraction from the Outlook event body when Graph does not return `onlineMeeting.joinUrl`
 
@@ -327,6 +330,7 @@ Current Notion page body content includes:
 
 - copied template page blocks first when `notion.templatePageId` is configured
 - the configured generated sections from `notion.pageContent.sections`
+- for native `notion.dataSourceTemplate`, these generated sections are appended during `sync` after a short delay, not during the initial page creation call
 - by default this includes:
   - a `Meeting Link` section when a meeting join URL is available
   - a `Calendar Event` section when the Outlook `webLink` is available
@@ -721,6 +725,30 @@ Run the initial sync and auto-create missing required properties:
 
 ```bash
 npm run dev -- sync --config nolendar.yml --ensure-properties
+```
+
+For native Notion data source templates, `sync` automatically runs a delayed finalize pass before it exits:
+
+```bash
+npm run dev -- sync --config nolendar.yml
+```
+
+Tune the delay if your Notion templates need longer to settle:
+
+```bash
+npm run dev -- sync --config nolendar.yml --finalize-delay-ms 5000
+```
+
+Or run finalization as a separate step:
+
+```bash
+npm run dev -- finalize-templates --config nolendar.yml
+```
+
+Or include timing output while finalizing:
+
+```bash
+npm run dev -- finalize-templates --config nolendar.yml --timings
 ```
 
 Force-update already-synced pages even when the stored Outlook `changeKey` matches:

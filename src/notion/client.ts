@@ -25,4 +25,10 @@ export interface NotionClient {
     meeting: Meeting;
   }): Promise<void>;
   archivePage(pageId: string): Promise<void>;
+  finalizeMeetingPageContent(args: {
+    pageId: string;
+    config: NolendarConfig;
+    dataSource: NotionDataSourceSchema;
+    meeting: Meeting;
+  }): Promise<string>;
 }

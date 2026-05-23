@@ -8,8 +8,6 @@ import type { NotionClient } from "./client.js";
 import { buildMeetingChildren, buildMeetingProperties } from "./page-payload.js";
 
 const NOTION_API_VERSION = "2026-03-11";
-const TEMPLATE_READY_POLL_INTERVAL_MS = 250;
-const TEMPLATE_READY_MAX_POLLS = 8;
 
 interface NotionSdkClient {
   blocks: {
@@ -218,16 +216,6 @@ export class ApiNotionClient implements NotionClient {
     )) as { id?: string };
     const pageId = response.id ?? "";
 
-    if (pageId && dataSourceTemplate) {
-      await this.waitForTemplateReady(pageId);
-      await this.timed("blocks.children.append", `block_id=${pageId} children=${meetingChildren.length}`, () =>
-        this.client.blocks.children.append({
-          block_id: pageId,
-          children: meetingChildren,
-        }),
-      );
-    }
-
     return {
       id: pageId,
     };
@@ -270,6 +258,27 @@ export class ApiNotionClient implements NotionClient {
         archived: true,
       }),
     );
+  }
+
+  async finalizeMeetingPageContent(args: {
+    pageId: string;
+    config: NolendarConfig;
+    dataSource: NotionDataSourceSchema;
+    meeting: Meeting;
+  }): Promise<"appended" | "marked_existing"> {
+    const meetingChildren = buildMeetingChildren(args.config, args.meeting);
+
+    if (await this.pageHasGeneratedMeetingContent(args.pageId, args.config, args.meeting)) {
+      return "marked_existing";
+    }
+
+    await this.timed("blocks.children.append", `block_id=${args.pageId} children=${meetingChildren.length}`, () =>
+      this.client.blocks.children.append({
+        block_id: args.pageId,
+        children: meetingChildren,
+      }),
+    );
+    return "appended";
   }
 
   private async findUserIdByEmail(email: string): Promise<string | undefined> {
@@ -409,8 +418,7 @@ export class ApiNotionClient implements NotionClient {
   private async listBlockChildren(
     blockId: string,
     options: {
-      purpose?: "template_copy" | "template_ready_poll" | "nested_block_copy";
-      poll?: number;
+      purpose?: "template_copy" | "nested_block_copy";
     } = {},
   ): Promise<Array<Record<string, unknown>>> {
     const blocks: Array<Record<string, unknown>> = [];
@@ -487,19 +495,52 @@ export class ApiNotionClient implements NotionClient {
     return Promise.all(childBlocks.map((child) => this.sanitizeBlockForCreate(child)));
   }
 
-  private async waitForTemplateReady(pageId: string): Promise<void> {
-    for (let attempt = 0; attempt < TEMPLATE_READY_MAX_POLLS; attempt += 1) {
-      const children = await this.listBlockChildren(pageId, {
-        purpose: "template_ready_poll",
-        poll: attempt + 1,
-      });
+  private async pageHasGeneratedMeetingContent(pageId: string, config: NolendarConfig, meeting: Meeting): Promise<boolean> {
+    const children = await this.listBlockChildren(pageId);
+    const headings = new Set(
+      children
+        .map((child) => extractBlockHeading(child))
+        .filter((value): value is string => Boolean(value)),
+    );
+    const sections = config.notion.pageContent?.sections ?? [
+      "meeting_link",
+      "calendar_event",
+      "meeting_details",
+      "notes",
+      "action_items",
+    ];
 
-      if (children.length > 0) {
-        return;
+    for (const section of sections) {
+      switch (section) {
+        case "meeting_link":
+          if (meeting.meetingLink && !headings.has("Meeting Link")) {
+            return false;
+          }
+          break;
+        case "calendar_event":
+          if (meeting.eventLink && !headings.has("Calendar Event")) {
+            return false;
+          }
+          break;
+        case "meeting_details":
+          if ((meeting.details || meeting.agenda) && !headings.has("Meeting Details")) {
+            return false;
+          }
+          break;
+        case "notes":
+          if (!headings.has("Notes")) {
+            return false;
+          }
+          break;
+        case "action_items":
+          if (!headings.has("Action items")) {
+            return false;
+          }
+          break;
       }
-
-      await delay(TEMPLATE_READY_POLL_INTERVAL_MS);
     }
+
+    return true;
   }
 
   private async timed<T>(operation: string, detail: string | undefined, fn: () => Promise<T>): Promise<T> {
@@ -545,18 +586,13 @@ function describeBlockChildrenList(
   blockId: string,
   nextCursor: string | undefined,
   options: {
-    purpose?: "template_copy" | "template_ready_poll" | "nested_block_copy";
-    poll?: number;
+    purpose?: "template_copy" | "nested_block_copy";
   },
 ): string {
   const parts = [`block_id=${blockId}`];
 
   if (options.purpose) {
     parts.push(`purpose=${options.purpose}`);
-  }
-
-  if (options.poll !== undefined) {
-    parts.push(`poll=${options.poll}`);
   }
 
   parts.push(`start_cursor=${nextCursor ?? "-"}`);
@@ -567,6 +603,26 @@ function describeBlockChildrenList(
 
 function truncateForTiming(value: string, maxLength = 40): string {
   return value.length <= maxLength ? value : `${value.slice(0, maxLength - 3)}...`;
+}
+
+function extractBlockHeading(block: Record<string, unknown>): string | undefined {
+  const type = typeof block.type === "string" ? block.type : undefined;
+
+  if (type !== "heading_1" && type !== "heading_2" && type !== "heading_3") {
+    return undefined;
+  }
+
+  const payload = block[type] as { rich_text?: Array<{ plain_text?: string; text?: { content?: string } }> } | undefined;
+  const richText = payload?.rich_text;
+
+  if (!Array.isArray(richText)) {
+    return undefined;
+  }
+
+  return richText
+    .map((entry) => entry.plain_text ?? entry.text?.content ?? "")
+    .join("")
+    .trim() || undefined;
 }
 
 function normalizeProperties(
@@ -667,8 +723,4 @@ function buildDataSourceTemplatePayload(config: NolendarConfig): Record<string, 
     template_id: template.templateId,
     ...(template.timezone ? { timezone: template.timezone } : {}),
   };
-}
-
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
 }

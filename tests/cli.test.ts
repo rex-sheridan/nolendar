@@ -12,7 +12,15 @@ describe("cli", () => {
 
     const commandNames = cli.commands.map((command) => command.name());
 
-    expect(commandNames).toEqual(["list", "validate-config", "validate-notion", "print-notion-schema", "sync", "init"]);
+    expect(commandNames).toEqual([
+      "list",
+      "validate-config",
+      "validate-notion",
+      "print-notion-schema",
+      "sync",
+      "finalize-templates",
+      "init",
+    ]);
   });
 
   it("returns a non-zero exit code for invalid lookahead values", async () => {
@@ -31,6 +39,22 @@ describe("cli", () => {
     expect(stderr.error).toHaveBeenCalledWith(
       "`--lookahead` must be `today` or a relative range like `12h`, `5d`, `2w`, or `3m`.",
     );
+  });
+
+  it("returns a non-zero exit code for invalid finalize delay values", async () => {
+    const stdout = { log: vi.fn() };
+    const stderr = { error: vi.fn() };
+
+    const exitCode = await runCli(
+      ["node", "nolendar", "sync", "--config", "tests/fixtures/valid-config.yml", "--finalize-delay-ms", "-1"],
+      {
+        stdout,
+        stderr,
+      },
+    );
+
+    expect(exitCode).toBe(1);
+    expect(stderr.error).toHaveBeenCalledWith("`--finalize-delay-ms` must be a non-negative integer.");
   });
 
   it("returns a non-zero exit code when auth configuration is incomplete", async () => {

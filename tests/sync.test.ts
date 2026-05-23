@@ -80,6 +80,7 @@ describe("syncMeetingsToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncMeetingsToNotion(
@@ -129,6 +130,7 @@ describe("syncMeetingsToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion);
@@ -167,6 +169,7 @@ describe("syncMeetingsToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion);
@@ -198,6 +201,7 @@ describe("syncMeetingsToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion);
@@ -229,6 +233,7 @@ describe("syncMeetingsToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion, { dryRun: true });
@@ -267,6 +272,7 @@ describe("syncMeetingsToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion, { forceUpdate: true });
@@ -305,6 +311,7 @@ describe("syncMeetingsToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncMeetingsToNotion(
@@ -353,6 +360,7 @@ describe("syncMeetingsToNotion", () => {
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
 
     const result = await syncMeetingsToNotion(
