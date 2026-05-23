@@ -10,6 +10,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:list": "vitest list",
     "test:watch": "vitest",
     "lint": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/index.ts"
