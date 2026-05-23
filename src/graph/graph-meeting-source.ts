@@ -45,6 +45,7 @@ export class GraphMeetingSource implements MeetingSource {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
+        Prefer: 'outlook.timezone="UTC"',
       },
     });
 
@@ -63,8 +64,8 @@ export class GraphMeetingSource implements MeetingSource {
 export function normalizeGraphEvent(event: GraphEvent, calendar: CalendarConfig): Meeting {
   const id = required(event.id, "Graph event is missing `id`.");
   const changeKey = required(event.changeKey, `Graph event ${id} is missing \`changeKey\`.`);
-  const start = required(event.start?.dateTime, `Graph event ${id} is missing \`start.dateTime\`.`);
-  const end = required(event.end?.dateTime, `Graph event ${id} is missing \`end.dateTime\`.`);
+  const start = normalizeGraphDateTime(event.start, `Graph event ${id} is missing \`start.dateTime\`.`);
+  const end = normalizeGraphDateTime(event.end, `Graph event ${id} is missing \`end.dateTime\`.`);
   const details = normalizeBodyText(event.body?.content, event.body?.contentType) ?? event.bodyPreview ?? undefined;
   const fallbackMeetingLink = extractMeetingLink(event.body?.content);
 
@@ -74,8 +75,8 @@ export function normalizeGraphEvent(event: GraphEvent, calendar: CalendarConfig)
     calendarId: calendar.id,
     calendarName: calendar.name,
     title: event.subject?.trim() || "(untitled meeting)",
-    start: toIsoString(start),
-    end: toIsoString(end),
+    start,
+    end,
     organizer: event.organizer?.emailAddress?.name ?? event.organizer?.emailAddress?.address ?? undefined,
     attendees:
       event.attendees?.map((attendee) => ({
@@ -101,14 +102,37 @@ function required(value: string | null | undefined, message: string): string {
   return value;
 }
 
-function toIsoString(value: string): string {
-  const date = new Date(value);
+function normalizeGraphDateTime(
+  value: { dateTime?: string | null; timeZone?: string | null } | null | undefined,
+  missingMessage: string,
+): string {
+  const dateTime = required(value?.dateTime, missingMessage);
+  const normalizedInput = hasExplicitOffset(dateTime) ? dateTime : applyGraphTimezone(dateTime, value?.timeZone);
+  const date = new Date(normalizedInput);
 
   if (Number.isNaN(date.valueOf())) {
-    throw new Error(`Invalid Graph date/time: ${value}`);
+    throw new Error(`Invalid Graph date/time: ${dateTime}`);
   }
 
   return date.toISOString();
+}
+
+function hasExplicitOffset(value: string): boolean {
+  return /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+}
+
+function applyGraphTimezone(dateTime: string, timeZone?: string | null): string {
+  const normalizedZone = timeZone?.trim().toUpperCase();
+
+  if (!normalizedZone) {
+    return dateTime;
+  }
+
+  if (normalizedZone === "UTC" || normalizedZone === "ETC/UTC" || normalizedZone === "GMT" || normalizedZone === "ETC/GMT") {
+    return `${dateTime}Z`;
+  }
+
+  return dateTime;
 }
 
 function normalizeBodyText(content?: string | null, contentType?: string | null): string | undefined {

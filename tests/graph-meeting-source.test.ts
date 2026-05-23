@@ -17,9 +17,11 @@ describe("normalizeGraphEvent", () => {
         subject: "1:1",
         start: {
           dateTime: "2026-05-22T09:00:00-04:00",
+          timeZone: "Eastern Standard Time",
         },
         end: {
           dateTime: "2026-05-22T09:30:00-04:00",
+          timeZone: "Eastern Standard Time",
         },
         organizer: {
           emailAddress: {
@@ -102,10 +104,12 @@ describe("GraphMeetingSource", () => {
               changeKey: "ck-1",
               subject: "Planning",
               start: {
-                dateTime: "2026-05-22T10:00:00.000Z",
+                dateTime: "2026-05-22T10:00:00.0000000",
+                timeZone: "UTC",
               },
               end: {
-                dateTime: "2026-05-22T11:00:00.000Z",
+                dateTime: "2026-05-22T11:00:00.0000000",
+                timeZone: "UTC",
               },
             },
           ],
@@ -145,10 +149,12 @@ describe("GraphMeetingSource", () => {
       headers: {
         Authorization: "Bearer token-123",
         Accept: "application/json",
+        Prefer: 'outlook.timezone="UTC"',
       },
     });
     expect(meetings).toHaveLength(1);
     expect(meetings[0]?.title).toBe("Planning");
+    expect(meetings[0]?.start).toBe("2026-05-22T10:00:00.000Z");
   });
 
   it("extracts a Teams link from the event body when onlineMeeting is unavailable", () => {
@@ -158,10 +164,12 @@ describe("GraphMeetingSource", () => {
         changeKey: "ck-2",
         subject: "Review",
         start: {
-          dateTime: "2026-05-22T10:00:00.000Z",
+          dateTime: "2026-05-22T10:00:00.0000000",
+          timeZone: "UTC",
         },
         end: {
-          dateTime: "2026-05-22T11:00:00.000Z",
+          dateTime: "2026-05-22T11:00:00.0000000",
+          timeZone: "UTC",
         },
         body: {
           contentType: "html",
@@ -174,5 +182,27 @@ describe("GraphMeetingSource", () => {
 
     expect(meeting.meetingLink).toBe("https://teams.microsoft.com/l/meetup-join/abc");
     expect(meeting.details).toBe("Join here: Microsoft Teams Meeting");
+  });
+
+  it("treats bare UTC Graph timestamps as UTC instead of local time", () => {
+    const meeting = normalizeGraphEvent(
+      {
+        id: "evt-3",
+        changeKey: "ck-3",
+        subject: "Timezone check",
+        start: {
+          dateTime: "2026-05-23T15:00:00.0000000",
+          timeZone: "UTC",
+        },
+        end: {
+          dateTime: "2026-05-23T16:00:00.0000000",
+          timeZone: "UTC",
+        },
+      },
+      CALENDAR,
+    );
+
+    expect(meeting.start).toBe("2026-05-23T15:00:00.000Z");
+    expect(meeting.end).toBe("2026-05-23T16:00:00.000Z");
   });
 });
