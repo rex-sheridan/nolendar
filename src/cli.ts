@@ -152,7 +152,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
       );
 
       deps.stdout.log(
-        `Sync summary: created=${syncResult.created}, updated=${syncResult.updated}, skipped=${syncResult.skipped}, filtered=${syncResult.filtered}, dryRun=${syncResult.dryRun}`,
+        `Sync summary: created=${syncResult.created}, updated=${syncResult.updated}, archived=${syncResult.archived}, skipped=${syncResult.skipped}, filtered=${syncResult.filtered}, dryRun=${syncResult.dryRun}`,
       );
       },
     );

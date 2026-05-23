@@ -26,12 +26,13 @@ export class GraphMeetingSource implements MeetingSource {
     calendar: CalendarConfig;
     window: CalendarWindow;
     deltaLink?: string;
-  }): Promise<{ meetings: Meeting[]; deltaLink?: string }> {
+  }): Promise<{ meetings: Meeting[]; removedEventIds: string[]; deltaLink?: string }> {
     const accessToken = await this.accessTokenProvider.getAccessToken();
     let nextUrl: URL | undefined = args.deltaLink
       ? new URL(args.deltaLink)
       : buildCalendarViewDeltaUrl(args.calendar.id, args.window);
     const meetings: Meeting[] = [];
+    const removedEventIds: string[] = [];
     let deltaLink: string | undefined;
 
     while (nextUrl) {
@@ -40,11 +41,14 @@ export class GraphMeetingSource implements MeetingSource {
       });
       const events = payload.value ?? [];
 
-      if (events.some((event) => event["@removed"] != null)) {
-        throw new Error("Graph delta query returned removed events, which Nolendar does not handle yet.");
-      }
-
       for (const event of events) {
+        if (event["@removed"] != null) {
+          if (event.id) {
+            removedEventIds.push(event.id);
+          }
+          continue;
+        }
+
         if (!isSyncableCalendarViewEvent(event)) {
           continue;
         }
@@ -58,6 +62,7 @@ export class GraphMeetingSource implements MeetingSource {
 
     return {
       meetings,
+      removedEventIds,
       deltaLink,
     };
   }

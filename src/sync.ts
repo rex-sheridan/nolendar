@@ -15,6 +15,7 @@ export interface SyncResult {
   updated: number;
   skipped: number;
   filtered: number;
+  archived: number;
   dryRun: boolean;
 }
 
@@ -34,6 +35,7 @@ export async function syncMeetingsToNotion(
     updated: 0,
     skipped: 0,
     filtered: 0,
+    archived: 0,
     dryRun: options.dryRun ?? false,
   };
 

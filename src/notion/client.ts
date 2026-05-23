@@ -23,4 +23,5 @@ export interface NotionClient {
     dataSource: NotionDataSourceSchema;
     meeting: Meeting;
   }): Promise<void>;
+  archivePage(pageId: string): Promise<void>;
 }

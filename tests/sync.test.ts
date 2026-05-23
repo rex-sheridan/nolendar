@@ -78,6 +78,7 @@ describe("syncMeetingsToNotion", () => {
       findPageByEventId: vi.fn(async () => null),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion);
@@ -85,6 +86,7 @@ describe("syncMeetingsToNotion", () => {
     expect(result).toEqual({
       created: 1,
       updated: 0,
+      archived: 0,
       skipped: 0,
       filtered: 0,
       dryRun: false,
@@ -113,6 +115,7 @@ describe("syncMeetingsToNotion", () => {
       findPageByEventId: vi.fn(async () => ({ id: "page-1", eventId: "evt-1", changeKey: "ck-1" })),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion);
@@ -142,6 +145,7 @@ describe("syncMeetingsToNotion", () => {
       findPageByEventId: vi.fn(async () => ({ id: "page-1", eventId: "evt-1", changeKey: "old" })),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion);
@@ -171,6 +175,7 @@ describe("syncMeetingsToNotion", () => {
       findPageByEventId: vi.fn(async () => null),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion, { dryRun: true });
@@ -178,6 +183,7 @@ describe("syncMeetingsToNotion", () => {
     expect(result).toEqual({
       created: 1,
       updated: 0,
+      archived: 0,
       skipped: 0,
       filtered: 0,
       dryRun: true,
@@ -206,6 +212,7 @@ describe("syncMeetingsToNotion", () => {
       findPageByEventId: vi.fn(async () => ({ id: "page-1", eventId: "evt-1", changeKey: "ck-1" })),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
 
     const result = await syncMeetingsToNotion(CONFIG, [MEETING], notion, { forceUpdate: true });
@@ -213,6 +220,7 @@ describe("syncMeetingsToNotion", () => {
     expect(result).toEqual({
       created: 0,
       updated: 1,
+      archived: 0,
       skipped: 0,
       filtered: 0,
       dryRun: false,

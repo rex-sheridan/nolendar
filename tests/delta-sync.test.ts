@@ -54,6 +54,7 @@ describe("syncCalendarChangesToNotion", () => {
     const meetingSource = {
       listMeetingChanges: vi.fn(async () => ({
         meetings: [MEETING],
+        removedEventIds: [],
         deltaLink: "delta-2",
       })),
     };
@@ -73,6 +74,7 @@ describe("syncCalendarChangesToNotion", () => {
       findPageByEventId: vi.fn(async () => null),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
     const loadState = vi.fn(async () => ({
       version: 1 as const,
@@ -122,12 +124,14 @@ describe("syncCalendarChangesToNotion", () => {
       },
     });
     expect(result.created).toBe(1);
+    expect(result.archived).toBe(0);
   });
 
   it("falls back to a fresh calendar view delta when the saved window no longer matches", async () => {
     const meetingSource = {
       listMeetingChanges: vi.fn(async () => ({
         meetings: [MEETING],
+        removedEventIds: [],
         deltaLink: "delta-fresh",
       })),
     };
@@ -147,6 +151,7 @@ describe("syncCalendarChangesToNotion", () => {
       findPageByEventId: vi.fn(async () => null),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
 
     await syncCalendarChangesToNotion(CONFIG, notion, {
@@ -200,12 +205,14 @@ describe("syncCalendarChangesToNotion", () => {
       findPageByEventId: vi.fn(async () => null),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
 
     await syncCalendarChangesToNotion(CONFIG, notion, {
       meetingSource: {
         listMeetingChanges: vi.fn(async () => ({
           meetings: [MEETING],
+          removedEventIds: [],
           deltaLink: "delta-1",
         })),
       },
@@ -252,6 +259,7 @@ describe("syncCalendarChangesToNotion", () => {
       findPageByEventId: vi.fn(async () => null),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
     };
 
     await syncCalendarChangesToNotion(config, notion, {
@@ -265,6 +273,7 @@ describe("syncCalendarChangesToNotion", () => {
           order.push(`${calendar.id}:end`);
           return {
             meetings: [{ ...MEETING, calendarId: calendar.id, calendarName: calendar.name }],
+            removedEventIds: [],
             deltaLink: `delta-${calendar.id}`,
           };
         }),
@@ -281,5 +290,50 @@ describe("syncCalendarChangesToNotion", () => {
 
     expect(maxActiveCalls).toBe(1);
     expect(order).toEqual(["primary:start", "primary:end", "secondary:start", "secondary:end"]);
+  });
+
+  it("archives matching Notion pages for removed events", async () => {
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => undefined),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi
+        .fn()
+        .mockResolvedValueOnce({ id: "page-removed", eventId: "evt-removed", changeKey: "old" })
+        .mockResolvedValueOnce(null),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+    };
+
+    const result = await syncCalendarChangesToNotion(CONFIG, notion, {
+      meetingSource: {
+        listMeetingChanges: vi.fn(async () => ({
+          meetings: [MEETING],
+          removedEventIds: ["evt-removed", "evt-missing"],
+          deltaLink: "delta-1",
+        })),
+      },
+      loadState: vi.fn(async () => ({
+        version: 1 as const,
+        calendars: {},
+      })),
+      saveState: vi.fn(async () => undefined),
+      clock: {
+        now: () => new Date("2026-05-23T15:00:00.000Z"),
+      },
+    });
+
+    expect(notion.archivePage).toHaveBeenCalledWith("page-removed");
+    expect(result.archived).toBe(1);
   });
 });

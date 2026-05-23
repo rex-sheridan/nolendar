@@ -39,7 +39,6 @@ Implemented now:
 Planned next:
 
 - Recurring meeting sync hardening
-- Deleted event handling for delta sync
 - Template-based page creation
 - Remaining filter support for `ignorePersonal` and `ignoreOptionalAttendance`
 
@@ -697,6 +696,7 @@ The current sync implementation:
 - skips updates when the stored `changeKey` matches unless `--force-update` is used
 - updates existing pages when the `changeKey` differs
 - creates new pages when no matching event ID is found
+- archives matching Notion pages when Graph delta reports deleted events
 - persists delta state only after a successful non-dry-run sync
 
 ### Current Sync Limitations
@@ -704,7 +704,6 @@ The current sync implementation:
 Not implemented yet:
 
 - recurring meeting edge-case hardening
-- deleted event handling for Graph delta sync
 - template-page cloning
 - filters for `ignorePersonal` and `ignoreOptionalAttendance`
 - MCP-based Notion integration

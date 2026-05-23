@@ -193,6 +193,13 @@ export class ApiNotionClient implements NotionClient {
     });
   }
 
+  async archivePage(pageId: string): Promise<void> {
+    await this.client.pages.update({
+      page_id: pageId,
+      archived: true,
+    });
+  }
+
   private async findUserIdByEmail(email: string): Promise<string | undefined> {
     const normalizedEmail = email.trim().toLowerCase();
     let nextCursor: string | undefined;

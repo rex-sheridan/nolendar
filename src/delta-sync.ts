@@ -18,6 +18,7 @@ export interface DeltaMeetingSource {
     deltaLink?: string;
   }): Promise<{
     meetings: Meeting[];
+    removedEventIds: string[];
     deltaLink?: string;
   }>;
 }
@@ -44,6 +45,7 @@ export async function syncCalendarChangesToNotion(
   const existingState = await loadState(config.sync.statePath);
   const nextCalendars = { ...existingState.calendars };
   const meetingsByCalendar: Meeting[][] = [];
+  let archived = 0;
 
   for (const calendar of config.calendars) {
     const saved = existingState.calendars[calendar.id];
@@ -53,6 +55,24 @@ export async function syncCalendarChangesToNotion(
       window,
       deltaLink,
     });
+
+    for (const removedEventId of result.removedEventIds) {
+      const existing = await notion.findPageByEventId({
+        dataSourceId: config.notion.databaseId,
+        eventIdPropertyName: config.mapping.eventId,
+        changeKeyPropertyName: config.mapping.changeKey,
+        eventId: removedEventId,
+      });
+
+      if (!existing) {
+        continue;
+      }
+
+      archived += 1;
+      if (!syncOptions.dryRun) {
+        await notion.archivePage(existing.id);
+      }
+    }
 
     if (result.deltaLink) {
       nextCalendars[calendar.id] = {
@@ -78,7 +98,10 @@ export async function syncCalendarChangesToNotion(
     });
   }
 
-  return syncResult;
+  return {
+    ...syncResult,
+    archived,
+  };
 }
 
 function canReuseDelta(

@@ -355,12 +355,13 @@ describe("GraphMeetingSource", () => {
       },
     });
     expect(result.meetings.map((meeting) => meeting.id)).toEqual(["evt-1", "evt-2"]);
+    expect(result.removedEventIds).toEqual([]);
     expect(result.deltaLink).toBe(
       "https://graph.microsoft.com/v1.0/me/calendars/primary/calendarView/delta?$deltatoken=done",
     );
   });
 
-  it("fails fast when a delta response includes removed events", async () => {
+  it("returns removed event ids from delta responses", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({
@@ -389,15 +390,16 @@ describe("GraphMeetingSource", () => {
       fetchMock as unknown as typeof fetch,
     );
 
-    await expect(
-      source.listMeetingChanges({
-        calendar: CALENDAR,
-        window: {
-          start: "2026-05-22T00:00:00.000Z",
-          end: "2026-05-23T00:00:00.000Z",
-        },
-      }),
-    ).rejects.toThrowError("Graph delta query returned removed events, which Nolendar does not handle yet.");
+    const result = await source.listMeetingChanges({
+      calendar: CALENDAR,
+      window: {
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      },
+    });
+
+    expect(result.meetings).toEqual([]);
+    expect(result.removedEventIds).toEqual(["evt-removed"]);
   });
 
   it("hydrates partial delta events before normalizing them", async () => {
@@ -465,6 +467,7 @@ describe("GraphMeetingSource", () => {
     expect(String(hydrationUrl)).toContain("/me/calendars/primary/events/evt-4");
     expect(result.meetings[0]?.changeKey).toBe("ck-4");
     expect(result.meetings[0]?.start).toBe("2026-05-22T14:00:00.000Z");
+    expect(result.removedEventIds).toEqual([]);
   });
 
   it("ignores series master events from delta results", async () => {
@@ -528,6 +531,7 @@ describe("GraphMeetingSource", () => {
     });
 
     expect(result.meetings.map((meeting) => meeting.id)).toEqual(["occ-1"]);
+    expect(result.removedEventIds).toEqual([]);
   });
 
   it("retries throttled Graph requests using Retry-After", async () => {
