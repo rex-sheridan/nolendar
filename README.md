@@ -2,26 +2,36 @@
 
 Nolendar reads upcoming meetings from Outlook Calendar via Microsoft Graph and turns them into structured Notion tasks/pages for meeting notes, action items, and related context.
 
-The project is currently in early development. Milestone 2 is complete: Nolendar can load YAML config, authenticate to Microsoft Graph using device-code auth, and list upcoming meetings from one or more Outlook calendars on the command line.
+The project is currently in early development. Milestone 3 is complete: Nolendar can load YAML config, authenticate to Microsoft Graph, validate a target Notion data source, and perform an idempotent initial sync that creates or updates meeting pages without duplicating them.
 
 ## Current Status
 
 Implemented now:
 
 - YAML config loading and validation
-- CLI commands for config validation and meeting listing
+- CLI commands for config validation, Notion validation, meeting listing, and sync
 - Microsoft Graph device-code authentication
+- Notion API integration
 - Multi-calendar meeting listing
 - Configurable lookahead windows:
   - `today`
   - `24h`
   - `7d`
 - Normalized meeting output for CLI display
+- Notion schema validation for required properties
+- Optional creation of missing required Notion properties
+- Idempotent initial sync using Outlook event ID and `changeKey`
+- Sync filtering for:
+  - declined meetings
+  - minimum meeting duration
+  - meetings without attendees
+- Created Notion pages include sections for:
+  - Agenda
+  - Notes
+  - Action items
 
 Planned next:
 
-- Notion database validation
-- Idempotent initial sync from Outlook to Notion
 - Delta-query incremental sync
 - Recurring meeting sync hardening
 - Template-based page creation
@@ -72,6 +82,7 @@ Stored configuration should support:
 - Node.js 20+
 - A Microsoft app registration with a client ID for Graph device-code authentication
 - Access to the Outlook calendars you want to read
+- A Notion integration token with access to the target data source
 
 ## Installation
 
@@ -119,7 +130,8 @@ sync:
 ### Config Notes
 
 - `microsoft.tenant` supports `common`, `organizations`, or `consumers`
-- `notion.databaseId` is already required, even though Notion sync is not implemented yet
+- `notion.databaseId` is required
+- with the current Notion API model, this value should be the target data source ID used for row queries and page creation
 - `calendars` must contain at least one calendar
 - `sync.lookahead` defaults to `today`
 - `sync.statePath` defaults to `.nolendar/state.json`, resolved relative to the config file
@@ -129,12 +141,35 @@ sync:
   - `Outlook Event ID`
   - `Outlook ChangeKey`
 
+### Required Notion Properties
+
+Nolendar validates the following properties on the target Notion data source:
+
+- title property mapped by `mapping.title`
+- date property mapped by `mapping.due`
+- rich text property mapped by `mapping.eventId`
+- rich text property mapped by `mapping.changeKey`
+
+If these properties are missing, you can either create them yourself or use `--ensure-properties` with `validate-notion` or `sync`.
+
 ## Environment Variables
 
 Current Microsoft Graph auth uses device-code flow and requires:
 
 ```bash
 export MICROSOFT_CLIENT_ID=your_app_registration_client_id
+```
+
+Notion API access requires one of:
+
+```bash
+export NOTION_TOKEN=secret_xxx
+```
+
+or
+
+```bash
+export NOTION_API_KEY=secret_xxx
 ```
 
 Optional:
@@ -168,6 +203,30 @@ Override the lookahead window:
 npm run dev -- list --config nolendar.yml --lookahead 24h
 ```
 
+Validate the target Notion data source:
+
+```bash
+npm run dev -- validate-notion --config nolendar.yml
+```
+
+Create missing required Notion properties when possible:
+
+```bash
+npm run dev -- validate-notion --config nolendar.yml --ensure-properties
+```
+
+Preview sync actions without changing Notion:
+
+```bash
+npm run dev -- sync --config nolendar.yml --dry-run
+```
+
+Run the initial sync and auto-create missing required properties:
+
+```bash
+npm run dev -- sync --config nolendar.yml --ensure-properties
+```
+
 Or build the project and run the compiled CLI:
 
 ```bash
@@ -181,6 +240,10 @@ node dist/index.js list --config nolendar.yml --lookahead 7d
   - Prints upcoming meetings for the configured calendars and requested time window
 - `validate-config`
   - Loads the YAML config and prints the normalized result as JSON
+- `validate-notion`
+  - Validates access to the configured Notion data source and checks required properties
+- `sync`
+  - Lists meetings for the requested window and creates, updates, or skips Notion pages based on idempotency checks
 
 ### Example `list` Output
 
@@ -196,6 +259,31 @@ Meetings for today from 2 configured calendar(s) between 2026-05-22T00:00:00.000
 ```
 
 When using device-code auth, Microsoft will prompt you in the terminal to open `https://microsoft.com/devicelogin` and enter a code.
+
+### Current Sync Behavior
+
+The current sync implementation:
+
+- validates the Notion schema before writing
+- optionally creates missing required properties with `--ensure-properties`
+- filters meetings using:
+  - `ignoreDeclined`
+  - `minDurationMinutes`
+  - `requireAttendees`
+- looks up existing Notion pages by the configured Outlook event ID property
+- skips updates when the stored `changeKey` matches
+- updates existing pages when the `changeKey` differs
+- creates new pages when no matching event ID is found
+
+### Current Sync Limitations
+
+Not implemented yet:
+
+- delta-query incremental sync
+- recurring meeting edge-case hardening
+- template-page cloning
+- filters for `ignorePersonal` and `ignoreOptionalAttendance`
+- MCP-based Notion integration
 
 ## Idempotency
 
@@ -235,6 +323,8 @@ npm run test:watch
 npm run lint
 npm run build
 npm run dev -- list --config nolendar.yml
+npm run dev -- validate-notion --config nolendar.yml
+npm run dev -- sync --config nolendar.yml --dry-run
 ```
 
 ## Implementation Plan
@@ -245,3 +335,4 @@ Current completed milestones:
 
 - Milestone 1: project scaffold, config loading, basic CLI
 - Milestone 2: Microsoft Graph meeting listing
+- Milestone 3: Notion schema validation and idempotent initial sync

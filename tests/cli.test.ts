@@ -11,7 +11,7 @@ describe("cli", () => {
 
     const commandNames = cli.commands.map((command) => command.name());
 
-    expect(commandNames).toEqual(["list", "validate-config"]);
+    expect(commandNames).toEqual(["list", "validate-config", "validate-notion", "sync"]);
   });
 
   it("returns a non-zero exit code for invalid lookahead values", async () => {
