@@ -1,0 +1,8 @@
+notion:
+  databaseId: db_123
+
+calendars:
+  - id: primary
+    name: Primary
+  - id: team
+    name: Team
