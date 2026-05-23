@@ -54,14 +54,51 @@ export function buildRequiredNotionProperties(config: NolendarConfig): RequiredN
     });
   }
 
+  if (config.mapping.participants) {
+    required.push({
+      name: config.mapping.participants,
+      type: "relation",
+    });
+  }
+
   return required;
+}
+
+export function buildRequiredPeopleDataSourceProperties(config: NolendarConfig): RequiredNotionProperty[] {
+  if (!config.notion.peopleDataSource) {
+    return [];
+  }
+
+  return [
+    {
+      name: config.notion.peopleDataSource.nameProperty,
+      type: "title",
+    },
+    {
+      name: config.notion.peopleDataSource.emailProperty,
+      type: "email",
+    },
+  ];
 }
 
 export function validateNotionSchema(
   config: NolendarConfig,
   schema: NotionDataSourceSchema,
 ): NotionSchemaValidationResult {
-  const required = buildRequiredNotionProperties(config);
+  return validateSchemaRequirements(buildRequiredNotionProperties(config), schema);
+}
+
+export function validatePeopleDataSourceSchema(
+  config: NolendarConfig,
+  schema: NotionDataSourceSchema,
+): NotionSchemaValidationResult {
+  return validateSchemaRequirements(buildRequiredPeopleDataSourceProperties(config), schema);
+}
+
+function validateSchemaRequirements(
+  required: RequiredNotionProperty[],
+  schema: NotionDataSourceSchema,
+): NotionSchemaValidationResult {
   const missing: RequiredNotionProperty[] = [];
   const mismatched: NotionSchemaMismatch[] = [];
 

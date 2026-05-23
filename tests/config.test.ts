@@ -43,6 +43,32 @@ describe("normalizeConfig", () => {
     expect(config.notion.defaultAssigneeEmail).toBe("me@example.com");
   });
 
+  it("accepts a people data source and participants mapping", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        peopleDataSource: {
+          databaseId: "people_123",
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+      mapping: {
+        participants: "Participants",
+      },
+    });
+
+    expect(config.notion.peopleDataSource).toEqual({
+      databaseId: "people_123",
+      nameProperty: "Name",
+      emailProperty: "Email Address",
+    });
+    expect(config.mapping.participants).toBe("Participants");
+  });
+
   it("accepts an emoji page icon", () => {
     const config = normalizeConfig({
       notion: {
@@ -159,6 +185,42 @@ describe("normalizeConfig", () => {
         ],
       }),
     ).toThrowError(new ConfigError("`notion.databaseId` is required."));
+  });
+
+  it("rejects a participants mapping without a people data source", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+        mapping: {
+          participants: "Participants",
+        },
+      }),
+    ).toThrowError(new ConfigError("`notion.peopleDataSource` is required when `mapping.participants` is configured."));
+  });
+
+  it("rejects a people data source without a participants mapping", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+          peopleDataSource: {
+            databaseId: "people_123",
+          },
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+      }),
+    ).toThrowError(new ConfigError("`mapping.participants` is required when `notion.peopleDataSource` is configured."));
   });
 
   it("accepts the authorization code auth mode", () => {

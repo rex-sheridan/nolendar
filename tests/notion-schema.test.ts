@@ -10,6 +10,11 @@ const CONFIG: NolendarConfig = {
   },
   notion: {
     databaseId: "data-source-id",
+    peopleDataSource: {
+      databaseId: "people-data-source-id",
+      nameProperty: "Name",
+      emailProperty: "Email Address",
+    },
     defaultTags: ["meeting"],
     defaultAssigneeEmail: "me@example.com",
   },
@@ -32,6 +37,7 @@ const CONFIG: NolendarConfig = {
     eventLink: "Source URL",
     tags: "Tags",
     assignee: "Assignee",
+    participants: "Participants",
   },
   sync: {
     lookahead: "today",
@@ -49,6 +55,7 @@ describe("buildRequiredNotionProperties", () => {
       { name: "Source URL", type: "url" },
       { name: "Tags", type: "multi_select" },
       { name: "Assignee", type: "people" },
+      { name: "Participants", type: "relation" },
     ]);
   });
 });
@@ -66,6 +73,7 @@ describe("validateNotionSchema", () => {
         "Source URL": { id: "source-url", name: "Source URL", type: "url" },
         Tags: { id: "tags", name: "Tags", type: "multi_select" },
         Assignee: { id: "assignee", name: "Assignee", type: "people" },
+        Participants: { id: "participants", name: "Participants", type: "relation" },
       },
     });
 
@@ -80,8 +88,10 @@ describe("validateNotionSchema", () => {
       title: "Meetings",
       properties: {
         Name: { id: "title", name: "Name", type: "rich_text" },
+        "Email Address": { id: "email", name: "Email Address", type: "rich_text" },
         Due: { id: "due", name: "Due", type: "date" },
         "Source URL": { id: "source-url", name: "Source URL", type: "rich_text" },
+        Participants: { id: "participants", name: "Participants", type: "people" },
       },
     });
 
@@ -95,6 +105,7 @@ describe("validateNotionSchema", () => {
     expect(result.mismatched).toEqual([
       { name: "Name", expectedType: "title", actualType: "rich_text" },
       { name: "Source URL", expectedType: "url", actualType: "rich_text" },
+      { name: "Participants", expectedType: "relation", actualType: "people" },
     ]);
   });
 });

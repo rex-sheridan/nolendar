@@ -11,6 +11,11 @@ const CONFIG: NolendarConfig = {
   },
   notion: {
     databaseId: "data-source-id",
+    peopleDataSource: {
+      databaseId: "people-data-source-id",
+      nameProperty: "Name",
+      emailProperty: "Email Address",
+    },
     defaultTags: ["meeting", "outlook"],
     defaultAssigneeEmail: "me@example.com",
   },
@@ -33,6 +38,7 @@ const CONFIG: NolendarConfig = {
     eventLink: "Source URL",
     tags: "Tags",
     assignee: "Assignee",
+    participants: "Participants",
   },
   sync: {
     lookahead: "today",
@@ -69,11 +75,13 @@ describe("buildMeetingProperties", () => {
           "Source URL": { id: "source-url", name: "Source URL", type: "url" },
           Tags: { id: "tags", name: "Tags", type: "multi_select" },
           Assignee: { id: "assignee", name: "Assignee", type: "people" },
+          Participants: { id: "participants", name: "Participants", type: "relation" },
         },
       },
       MEETING,
       {
         assigneeUserId: "user-123",
+        participantPageIds: ["person-1", "person-2"],
       },
     );
 
@@ -85,6 +93,9 @@ describe("buildMeetingProperties", () => {
     });
     expect(properties.Assignee).toEqual({
       people: [{ id: "user-123" }],
+    });
+    expect(properties.Participants).toEqual({
+      relation: [{ id: "person-1" }, { id: "person-2" }],
     });
   });
 

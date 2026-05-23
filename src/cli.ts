@@ -22,10 +22,14 @@ import { syncMeetingsToNotion } from "./sync.js";
 export interface CliDependencies {
   stdout: Pick<Console, "log">;
   stderr: Pick<Console, "error">;
+  loadConfig?: typeof loadConfig;
+  buildNotionClient?: () => ApiNotionClient;
 }
 
 export function createCli(deps: CliDependencies = defaultDeps()): Command {
   const program = new Command();
+  const loadConfigFn = deps.loadConfig ?? loadConfig;
+  const buildNotionClientFn = deps.buildNotionClient ?? (() => buildNotionClient(deps));
 
   program.name("nolendar").description("Sync Outlook meetings into Notion.");
 
@@ -35,7 +39,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .option("--lookahead <window>", "One of: today, 24h, 7d")
     .action(async (options: { config: string; lookahead?: string }) => {
-      const config = await loadConfig(options.config);
+      const config = await loadConfigFn(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
       const meetingSource = buildGraphMeetingSource(config, deps);
       const result = await listMeetings(config, lookahead, { meetingSource });
@@ -61,7 +65,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .description("Validate YAML config and print the normalized result.")
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .action(async (options: { config: string }) => {
-      const config = await loadConfig(options.config);
+      const config = await loadConfigFn(options.config);
       deps.stdout.log(JSON.stringify(config, null, 2));
     });
 
@@ -71,8 +75,8 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .option("--ensure-properties", "Create missing required properties if possible", false)
     .action(async (options: { config: string; ensureProperties: boolean }) => {
-      const config = await loadConfig(options.config);
-      const notion = buildNotionClient(deps);
+      const config = await loadConfigFn(options.config);
+      const notion = buildNotionClientFn();
 
       await validateOrEnsureNotionSchema(config, notion, {
         ensureProperties: options.ensureProperties,
@@ -84,6 +88,27 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
       deps.stdout.log(`Notion data source ${config.notion.databaseId} is valid.`);
       if (result.missing.length === 0 && result.mismatched.length === 0) {
         deps.stdout.log("Required properties are present.");
+      }
+    });
+
+  program
+    .command("print-notion-schema")
+    .description("Print the detected Notion schema for the configured meeting and People data sources.")
+    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .action(async (options: { config: string }) => {
+      const config = await loadConfigFn(options.config);
+      const notion = buildNotionClientFn();
+
+      const meetingSchema = await notion.retrieveDataSource(config.notion.databaseId);
+      for (const line of formatSchemaOutput("Meeting data source", meetingSchema.id, meetingSchema.title, meetingSchema.properties)) {
+        deps.stdout.log(line);
+      }
+
+      if (config.notion.peopleDataSource) {
+        const peopleSchema = await notion.retrieveDataSource(config.notion.peopleDataSource.databaseId);
+        for (const line of formatSchemaOutput("People data source", peopleSchema.id, peopleSchema.title, peopleSchema.properties)) {
+          deps.stdout.log(line);
+        }
       }
     });
 
@@ -103,10 +128,10 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         ensureProperties: boolean;
         forceUpdate: boolean;
       }) => {
-      const config = await loadConfig(options.config);
+      const config = await loadConfigFn(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
       const meetingSource = buildGraphMeetingSource(config, deps);
-      const notion = buildNotionClient(deps);
+      const notion = buildNotionClientFn();
       const meetingsResult = await listMeetings(config, lookahead, { meetingSource });
       const syncResult = await syncMeetingsToNotion(config, meetingsResult.meetings, notion, {
         dryRun: options.dryRun,
@@ -169,6 +194,27 @@ function defaultDeps(): CliDependencies {
     stdout: console,
     stderr: console,
   };
+}
+
+function formatSchemaOutput(
+  label: string,
+  dataSourceId: string,
+  title: string | undefined,
+  properties: Record<string, { type: string }>,
+): string[] {
+  const lines = [`${label}: ${title ? `${title} ` : ""}(${dataSourceId})`];
+  const entries = Object.entries(properties).sort(([left], [right]) => left.localeCompare(right));
+
+  if (entries.length === 0) {
+    lines.push("  No properties found.");
+    return lines;
+  }
+
+  for (const [name, property] of entries) {
+    lines.push(`  - ${name}: ${property.type}`);
+  }
+
+  return lines;
 }
 
 function buildGraphMeetingSource(config: NolendarConfig, deps: CliDependencies): GraphMeetingSource {

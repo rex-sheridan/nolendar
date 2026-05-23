@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createCli, runCli } from "../src/cli.js";
+import type { NolendarConfig } from "../src/domain/config.js";
 
 describe("cli", () => {
   it("registers the expected commands", () => {
@@ -11,7 +12,7 @@ describe("cli", () => {
 
     const commandNames = cli.commands.map((command) => command.name());
 
-    expect(commandNames).toEqual(["list", "validate-config", "validate-notion", "sync", "init"]);
+    expect(commandNames).toEqual(["list", "validate-config", "validate-notion", "print-notion-schema", "sync", "init"]);
   });
 
   it("returns a non-zero exit code for invalid lookahead values", async () => {
@@ -46,5 +47,81 @@ describe("cli", () => {
 
     expect(exitCode).toBe(1);
     expect(stderr.error).toHaveBeenCalled();
+  });
+
+  it("prints the detected meeting and People data source schemas", async () => {
+    const stdout = { log: vi.fn() };
+    const stderr = { error: vi.fn() };
+    const config: NolendarConfig = {
+      microsoft: { tenant: "common", authMode: "device_code" },
+      notion: {
+        databaseId: "meetings-id",
+        peopleDataSource: {
+          databaseId: "people-id",
+          nameProperty: "Name",
+          emailProperty: "Email Address",
+        },
+      },
+      calendars: [{ id: "primary" }],
+      filters: {
+        ignoreDeclined: true,
+        requireAttendees: false,
+        ignorePersonal: false,
+        ignoreOptionalAttendance: false,
+      },
+      mapping: {
+        title: "Task name",
+        due: "Due",
+        eventId: "Outlook Event ID",
+        changeKey: "Outlook ChangeKey",
+        participants: "Participants",
+      },
+      sync: {
+        lookahead: "today",
+        statePath: "/tmp/.nolendar/state.json",
+      },
+    };
+    const loadConfigMock = vi.fn(async () => config);
+    const retrieveDataSource = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "meetings-id",
+        title: "Meetings",
+        properties: {
+          "Task name": { id: "title", name: "Task name", type: "title" },
+          Participants: { id: "participants", name: "Participants", type: "relation" },
+          Due: { id: "due", name: "Due", type: "date" },
+        },
+      })
+      .mockResolvedValueOnce({
+        id: "people-id",
+        title: "People",
+        properties: {
+          Name: { id: "name", name: "Name", type: "title" },
+          "Email Address": { id: "email", name: "Email Address", type: "email" },
+        },
+      });
+
+    const exitCode = await runCli(["node", "nolendar", "print-notion-schema"], {
+      stdout,
+      stderr,
+      loadConfig: loadConfigMock,
+      buildNotionClient: () =>
+        ({
+          retrieveDataSource,
+        }) as never,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(retrieveDataSource).toHaveBeenCalledWith("meetings-id");
+    expect(retrieveDataSource).toHaveBeenCalledWith("people-id");
+    expect(stdout.log).toHaveBeenNthCalledWith(1, "Meeting data source: Meetings (meetings-id)");
+    expect(stdout.log).toHaveBeenNthCalledWith(2, "  - Due: date");
+    expect(stdout.log).toHaveBeenNthCalledWith(3, "  - Participants: relation");
+    expect(stdout.log).toHaveBeenNthCalledWith(4, "  - Task name: title");
+    expect(stdout.log).toHaveBeenNthCalledWith(5, "People data source: People (people-id)");
+    expect(stdout.log).toHaveBeenNthCalledWith(6, "  - Email Address: email");
+    expect(stdout.log).toHaveBeenNthCalledWith(7, "  - Name: title");
+    expect(stderr.error).not.toHaveBeenCalled();
   });
 });

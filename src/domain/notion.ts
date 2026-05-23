@@ -2,10 +2,12 @@ export type NotionPropertyType =
   | "title"
   | "date"
   | "rich_text"
+  | "email"
   | "url"
   | "status"
   | "multi_select"
   | "people"
+  | "relation"
   | string;
 
 export interface NotionDataSourceProperty {
@@ -28,5 +30,5 @@ export interface NotionPageRecord {
 
 export interface RequiredNotionProperty {
   name: string;
-  type: "title" | "date" | "rich_text" | "url" | "multi_select" | "people";
+  type: "title" | "date" | "rich_text" | "email" | "url" | "multi_select" | "people" | "relation";
 }

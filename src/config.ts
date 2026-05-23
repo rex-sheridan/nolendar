@@ -30,8 +30,11 @@ export async function loadConfig(configPath: string): Promise<NolendarConfig> {
 export function normalizeConfig(input: unknown, configPath = process.cwd()): NolendarConfig {
   const record = asRecord(input, "Configuration file must contain a YAML object.");
   const notion = normalizeNotion(record.notion);
+  const mapping = normalizeMapping(record.mapping);
   const calendars = normalizeCalendars(record.calendars);
   const lookahead = normalizeLookahead(record.sync);
+
+  validateParticipantConfig(notion, mapping);
 
   return {
     microsoft: {
@@ -41,7 +44,7 @@ export function normalizeConfig(input: unknown, configPath = process.cwd()): Nol
     notion,
     calendars,
     filters: normalizeFilters(record.filters),
-    mapping: normalizeMapping(record.mapping),
+    mapping,
     sync: {
       lookahead,
       statePath: normalizeStatePath(record.sync, configPath),
@@ -97,6 +100,7 @@ function normalizeNotion(value: unknown): NotionConfig {
     "`notion.defaultAssigneeEmail` must be a string.",
   );
   const pageIcon = normalizeNotionPageIcon(record.pageIcon);
+  const peopleDataSource = normalizePeopleDataSource(record.peopleDataSource);
 
   return {
     databaseId,
@@ -104,6 +108,7 @@ function normalizeNotion(value: unknown): NotionConfig {
     defaultTags,
     defaultAssigneeEmail,
     pageIcon,
+    peopleDataSource,
   };
 }
 
@@ -157,6 +162,7 @@ function normalizeMapping(value: unknown): MappingConfig {
     eventLink: optionalString(record.eventLink, "`mapping.eventLink` must be a string."),
     tags: optionalString(record.tags, "`mapping.tags` must be a string."),
     assignee: optionalString(record.assignee, "`mapping.assignee` must be a string."),
+    participants: optionalString(record.participants, "`mapping.participants` must be a string."),
   };
 }
 
@@ -287,4 +293,41 @@ function normalizeNotionPageIcon(value: unknown): NotionConfig["pageIcon"] {
   }
 
   throw new ConfigError("`notion.pageIcon.type` must be one of: emoji, icon.");
+}
+
+function normalizePeopleDataSource(value: unknown): NotionConfig["peopleDataSource"] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const record = asRecord(value, "`notion.peopleDataSource` must be an object.");
+
+  return {
+    databaseId: requireString(record.databaseId, "`notion.peopleDataSource.databaseId` is required."),
+    nameProperty: optionalStringWithDefault(
+      record.nameProperty,
+      "Name",
+      "`notion.peopleDataSource.nameProperty` must be a string.",
+    ),
+    emailProperty: optionalStringWithDefault(
+      record.emailProperty,
+      "Email Address",
+      "`notion.peopleDataSource.emailProperty` must be a string.",
+    ),
+  };
+}
+
+function validateParticipantConfig(notion: NotionConfig, mapping: MappingConfig): void {
+  const hasPeopleDataSource = notion.peopleDataSource !== undefined;
+  const hasParticipantsMapping = mapping.participants !== undefined;
+
+  if (hasPeopleDataSource === hasParticipantsMapping) {
+    return;
+  }
+
+  if (hasPeopleDataSource) {
+    throw new ConfigError("`mapping.participants` is required when `notion.peopleDataSource` is configured.");
+  }
+
+  throw new ConfigError("`notion.peopleDataSource` is required when `mapping.participants` is configured.");
 }

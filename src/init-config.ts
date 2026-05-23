@@ -7,6 +7,10 @@ const DEFAULT_CONFIG_TEMPLATE = `microsoft:
 
 notion:
   databaseId: your_notion_data_source_id
+  peopleDataSource:
+    databaseId: your_people_data_source_id
+    nameProperty: Name
+    emailProperty: Email Address
   defaultTags:
     - meeting
   defaultAssigneeEmail: you@example.com
@@ -33,6 +37,7 @@ mapping:
   eventLink: Source URL
   tags: Tags
   assignee: Assignee
+  participants: Participants
 
 sync:
   lookahead: today

@@ -13,6 +13,13 @@ export interface NotionConfig {
   defaultTags?: string[];
   defaultAssigneeEmail?: string;
   pageIcon?: NotionPageIconConfig;
+  peopleDataSource?: NotionPeopleDataSourceConfig;
+}
+
+export interface NotionPeopleDataSourceConfig {
+  databaseId: string;
+  nameProperty: string;
+  emailProperty: string;
 }
 
 export type NotionPageIconConfig =
@@ -47,6 +54,7 @@ export interface MappingConfig {
   eventLink?: string;
   tags?: string;
   assignee?: string;
+  participants?: string;
 }
 
 export interface SyncConfig {

@@ -8,6 +8,7 @@ export function buildMeetingProperties(
   meeting: Meeting,
   options: {
     assigneeUserId?: string;
+    participantPageIds?: string[];
   } = {},
 ): Record<string, unknown> {
   const properties: Record<string, unknown> = {
@@ -36,6 +37,7 @@ export function buildMeetingProperties(
   maybeSetConfiguredUrl(properties, dataSource, config.mapping.eventLink, meeting.eventLink);
   maybeSetTags(properties, dataSource, config.mapping.tags, config.notion.defaultTags);
   maybeSetAssignee(properties, dataSource, config.mapping.assignee, options.assigneeUserId);
+  maybeSetParticipants(properties, dataSource, config.mapping.participants, options.participantPageIds);
 
   return properties;
 }
@@ -136,6 +138,26 @@ function maybeSetAssignee(
 
   properties[propertyName] = {
     people: [{ id: userId }],
+  };
+}
+
+function maybeSetParticipants(
+  properties: Record<string, unknown>,
+  dataSource: NotionDataSourceSchema,
+  propertyName: string | undefined,
+  participantPageIds?: string[],
+): void {
+  if (
+    !propertyName ||
+    !participantPageIds ||
+    participantPageIds.length === 0 ||
+    dataSource.properties[propertyName]?.type !== "relation"
+  ) {
+    return;
+  }
+
+  properties[propertyName] = {
+    relation: participantPageIds.map((id) => ({ id })),
   };
 }
 

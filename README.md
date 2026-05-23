@@ -9,7 +9,7 @@ The project is currently in early development. Milestone 3 is complete: Nolendar
 Implemented now:
 
 - YAML config loading and validation
-- CLI commands for config validation, Notion validation, meeting listing, and sync
+- CLI commands for config validation, Notion validation, Notion schema inspection, meeting listing, and sync
 - Microsoft Graph authentication via:
   - device code flow
   - interactive browser flow using Azure Identity's development application
@@ -66,6 +66,7 @@ Planned next:
 - Source URL
 - Tags
 - Assignee
+- Participants
 - Status
 - Notes
 - Action items
@@ -110,6 +111,10 @@ microsoft:
 
 notion:
   databaseId: your_notion_database_id
+  peopleDataSource:
+    databaseId: your_people_data_source_id
+    nameProperty: Name
+    emailProperty: Email Address
   defaultTags:
     - meeting
     - notes
@@ -139,6 +144,7 @@ mapping:
   eventLink: Source URL
   tags: Tags
   assignee: Assignee
+  participants: Participants
 
 sync:
   lookahead: today
@@ -153,6 +159,9 @@ sync:
   - `interactive_browser`
   - `auth_code`
 - `notion.databaseId` is required
+- `notion.peopleDataSource` can be configured when you want attendee rows created or linked from a separate Notion People data source
+- `notion.peopleDataSource.nameProperty` defaults to `Name`
+- `notion.peopleDataSource.emailProperty` defaults to `Email Address`
 - `notion.defaultTags` can be used to apply static tags to each created Notion page
 - `notion.defaultAssigneeEmail` can be used to resolve a Notion user by email for the configured assignee property
 - `notion.pageIcon` can be used to apply a static page icon to created or updated Notion pages
@@ -172,9 +181,10 @@ sync:
   - `Outlook Event ID`
   - `Outlook ChangeKey`
 - optional mapping fields:
-  - `mapping.eventLink` for a Notion `url` property populated from Outlook `webLink`
-  - `mapping.tags` for a Notion `multi_select` property populated from `notion.defaultTags`
-  - `mapping.assignee` for a Notion `people` property populated from the authenticated Notion user
+- `mapping.eventLink` for a Notion `url` property populated from Outlook `webLink`
+- `mapping.tags` for a Notion `multi_select` property populated from `notion.defaultTags`
+- `mapping.assignee` for a Notion `people` property populated from the authenticated Notion user
+- `mapping.participants` for a Notion `relation` property populated from meeting attendees and linked to `notion.peopleDataSource`
 
 ### Required Notion Properties
 
@@ -187,8 +197,27 @@ Nolendar validates the following properties on the target Notion data source:
 - url property mapped by `mapping.eventLink`, if configured
 - multi-select property mapped by `mapping.tags`, if configured and `notion.defaultTags` is non-empty
 - people property mapped by `mapping.assignee`, if configured
+- relation property mapped by `mapping.participants`, if configured
+
+If `notion.peopleDataSource` is configured, Nolendar also validates that data source for:
+
+- the title property mapped by `notion.peopleDataSource.nameProperty`
+- the email property mapped by `notion.peopleDataSource.emailProperty`
 
 If these properties are missing, you can either create them yourself or use `--ensure-properties` with `validate-notion` or `sync`.
+
+Notes:
+
+- `--ensure-properties` only applies to auto-creatable properties on the meeting data source
+- the `Participants` relation must be created in Notion manually and point to the configured People data source
+
+To inspect exactly what Nolendar sees from Notion, run:
+
+```bash
+npm run dev -- print-notion-schema --config nolendar.yml
+```
+
+That prints the detected meeting data source schema and, when configured, the People data source schema with property names and types.
 
 ### Notion Property Mapping
 
@@ -202,9 +231,18 @@ Current Notion page creation supports:
 - tags from `notion.defaultTags` when `mapping.tags` is configured
 - assignee from `notion.defaultAssigneeEmail` when configured and resolvable
 - otherwise assignee from the authenticated Notion identity when `mapping.assignee` is configured
+- participants from Outlook attendees when `mapping.participants` and `notion.peopleDataSource` are configured
 - static page icons via `notion.pageIcon`
 - meeting body content from the full Outlook event body when available, otherwise `bodyPreview`
 - Teams join link extraction from the Outlook event body when Graph does not return `onlineMeeting.joinUrl`
+
+Participants behavior:
+
+- attendee matching is done by email address
+- if a People row with the attendee email already exists, Nolendar links it on the meeting page
+- if no matching People row exists, Nolendar creates one and then links it
+- attendees without email addresses are skipped for relation linking
+- duplicate attendee emails in a meeting are deduplicated before the relation is written
 
 Current Notion page body content includes:
 
@@ -219,6 +257,10 @@ Example:
 ```yaml
 notion:
   databaseId: your_notion_data_source_id
+  peopleDataSource:
+    databaseId: your_people_data_source_id
+    nameProperty: Name
+    emailProperty: Email Address
   defaultTags:
     - meeting
     - sync
@@ -232,6 +274,7 @@ mapping:
   eventLink: Source URL
   tags: Tags
   assignee: Assignee
+  participants: Participants
 ```
 
 Assignee resolution precedence:
@@ -561,6 +604,12 @@ Validate the target Notion data source:
 npm run dev -- validate-notion --config nolendar.yml
 ```
 
+Print the detected Notion schema exactly as Nolendar sees it:
+
+```bash
+npm run dev -- print-notion-schema --config nolendar.yml
+```
+
 Create missing required Notion properties when possible:
 
 ```bash
@@ -600,6 +649,8 @@ node dist/index.js list --config nolendar.yml --lookahead 7d
   - Loads the YAML config and prints the normalized result as JSON
 - `validate-notion`
   - Validates access to the configured Notion data source and checks required properties
+- `print-notion-schema`
+  - Prints the detected meeting data source schema and, when configured, the People data source schema
 - `sync`
   - Lists meetings for the requested window and creates, updates, or skips Notion pages based on idempotency checks
 - `init`

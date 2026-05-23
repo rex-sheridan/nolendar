@@ -27,6 +27,7 @@ interface NotionSdkClient {
 export class ApiNotionClient implements NotionClient {
   private readonly client: NotionSdkClient;
   private readonly defaultAssigneeCache = new Map<string, string | undefined>();
+  private readonly participantPageCache = new Map<string, string>();
 
   constructor(authToken: string, client?: NotionSdkClient) {
     this.client =
@@ -154,12 +155,14 @@ export class ApiNotionClient implements NotionClient {
     const assigneeUserId = args.config.mapping.assignee
       ? await this.getDefaultAssigneeUserId(args.config.notion.defaultAssigneeEmail)
       : undefined;
+    const participantPageIds = await this.resolveParticipantPageIds(args.config, args.meeting);
     const response = (await this.client.pages.create({
       parent: {
         data_source_id: args.dataSource.id,
       },
       properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
         assigneeUserId,
+        participantPageIds,
       }),
       icon: buildPageIcon(args.config),
       children: buildMeetingChildren(args.meeting),
@@ -179,10 +182,12 @@ export class ApiNotionClient implements NotionClient {
     const assigneeUserId = args.config.mapping.assignee
       ? await this.getDefaultAssigneeUserId(args.config.notion.defaultAssigneeEmail)
       : undefined;
+    const participantPageIds = await this.resolveParticipantPageIds(args.config, args.meeting);
     await this.client.pages.update({
       page_id: args.pageId,
       properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
         assigneeUserId,
+        participantPageIds,
       }),
       icon: buildPageIcon(args.config),
     });
@@ -221,6 +226,91 @@ export class ApiNotionClient implements NotionClient {
 
     return undefined;
   }
+
+  private async resolveParticipantPageIds(config: NolendarConfig, meeting: Meeting): Promise<string[]> {
+    const peopleDataSource = config.notion.peopleDataSource;
+    const participantsProperty = config.mapping.participants;
+
+    if (!peopleDataSource || !participantsProperty) {
+      return [];
+    }
+
+    const resolvedPageIds = new Set<string>();
+
+    for (const attendee of meeting.attendees) {
+      const email = attendee.email?.trim().toLowerCase();
+
+      if (!email) {
+        continue;
+      }
+
+      const cachedPageId = this.participantPageCache.get(email);
+      if (cachedPageId) {
+        resolvedPageIds.add(cachedPageId);
+        continue;
+      }
+
+      const pageId =
+        (await this.findPeoplePageByEmail(peopleDataSource.databaseId, peopleDataSource.emailProperty, email)) ??
+        (await this.createPeoplePage(peopleDataSource.databaseId, peopleDataSource.nameProperty, peopleDataSource.emailProperty, {
+          name: attendee.name?.trim(),
+          email,
+        }));
+
+      this.participantPageCache.set(email, pageId);
+      resolvedPageIds.add(pageId);
+    }
+
+    return Array.from(resolvedPageIds);
+  }
+
+  private async findPeoplePageByEmail(
+    dataSourceId: string,
+    emailPropertyName: string,
+    email: string,
+  ): Promise<string | undefined> {
+    const response = (await this.client.dataSources.query({
+      data_source_id: dataSourceId,
+      result_type: "page",
+      page_size: 1,
+      filter: {
+        property: emailPropertyName,
+        email: {
+          equals: email,
+        },
+      },
+    })) as {
+      results?: Array<{
+        id?: string;
+        object?: string;
+      }>;
+    };
+
+    return response.results?.find((entry) => entry.object === "page")?.id;
+  }
+
+  private async createPeoplePage(
+    dataSourceId: string,
+    namePropertyName: string,
+    emailPropertyName: string,
+    attendee: { name?: string; email: string },
+  ): Promise<string> {
+    const response = (await this.client.pages.create({
+      parent: {
+        data_source_id: dataSourceId,
+      },
+      properties: {
+        [namePropertyName]: {
+          title: [textBlock(attendee.name || attendee.email)],
+        },
+        [emailPropertyName]: {
+          email: attendee.email,
+        },
+      },
+    })) as { id?: string };
+
+    return response.id ?? "";
+  }
 }
 
 function normalizeProperties(
@@ -247,12 +337,16 @@ function propertyTypePayload(type: RequiredNotionProperty["type"]): Record<strin
       return { date: {} };
     case "rich_text":
       return { rich_text: {} };
+    case "email":
+      return { email: {} };
     case "url":
       return { url: {} };
     case "multi_select":
       return { multi_select: { options: [] } };
     case "people":
       return { people: {} };
+    case "relation":
+      throw new Error("Relation properties cannot be auto-created by Nolendar. Create the relation in Notion first.");
   }
 }
 
@@ -285,6 +379,15 @@ function buildPageIcon(config: NolendarConfig): Record<string, unknown> | undefi
     icon: {
       name: pageIcon.name,
       color: pageIcon.color ?? "gray",
+    },
+  };
+}
+
+function textBlock(content: string): { type: "text"; text: { content: string } } {
+  return {
+    type: "text",
+    text: {
+      content,
     },
   };
 }

@@ -1,6 +1,10 @@
 import type { NolendarConfig } from "../domain/config.js";
 import type { NotionClient } from "./client.js";
-import { formatNotionSchemaIssues, validateNotionSchema } from "./schema.js";
+import {
+  formatNotionSchemaIssues,
+  validateNotionSchema,
+  validatePeopleDataSourceSchema,
+} from "./schema.js";
 
 export class NotionSchemaError extends Error {
   constructor(message: string) {
@@ -16,14 +20,34 @@ export async function validateOrEnsureNotionSchema(
 ): Promise<void> {
   let schema = await notion.retrieveDataSource(config.notion.databaseId);
   let result = validateNotionSchema(config, schema);
+  const ensureableMissing = result.missing.filter((property) => property.type !== "relation");
 
-  if (!result.valid && options.ensureProperties && result.missing.length > 0 && result.mismatched.length === 0) {
-    await notion.ensureProperties(config.notion.databaseId, result.missing);
+  if (
+    !result.valid &&
+    options.ensureProperties &&
+    ensureableMissing.length > 0 &&
+    ensureableMissing.length === result.missing.length &&
+    result.mismatched.length === 0
+  ) {
+    await notion.ensureProperties(config.notion.databaseId, ensureableMissing);
     schema = await notion.retrieveDataSource(config.notion.databaseId);
     result = validateNotionSchema(config, schema);
   }
 
   if (!result.valid) {
     throw new NotionSchemaError(formatNotionSchemaIssues(result).join("\n"));
+  }
+
+  if (config.notion.peopleDataSource) {
+    const peopleSchema = await notion.retrieveDataSource(config.notion.peopleDataSource.databaseId);
+    const peopleResult = validatePeopleDataSourceSchema(config, peopleSchema);
+
+    if (!peopleResult.valid) {
+      throw new NotionSchemaError(
+        formatNotionSchemaIssues(peopleResult)
+          .map((issue) => `People data source: ${issue}`)
+          .join("\n"),
+      );
+    }
   }
 }
