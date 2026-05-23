@@ -183,6 +183,87 @@ If `MICROSOFT_GRAPH_SCOPES` is not set, Nolendar uses:
 - `Calendars.Read`
 - `User.Read`
 
+## Credential Setup
+
+To run a live end-to-end sync, you need:
+
+- `MICROSOFT_CLIENT_ID`
+- `NOTION_TOKEN` or `NOTION_API_KEY`
+- one or more Outlook calendar IDs
+- a target Notion data source ID
+
+### Microsoft App Registration
+
+Nolendar uses Microsoft Graph device-code authentication, so the app registration should be configured as a public client application.
+
+High-level steps:
+
+1. Open the Microsoft Entra admin center at `https://entra.microsoft.com/`
+2. Go to `Microsoft Entra ID` -> `Identity` -> `Applications` -> `App registrations`
+3. Select `New registration`
+4. Enter an app name such as `nolendar`
+5. Choose the supported account type:
+   - use `Accounts in any organizational directory and personal Microsoft accounts` if you want both work and personal accounts
+   - use a narrower option if you only need one tenant or only work accounts
+6. Leave `Redirect URI` empty
+7. Create the app registration
+8. Open `Authentication`
+9. Under `Advanced settings`, set `Allow public client flows` to `Yes`
+10. Copy the `Application (client) ID` and export it as `MICROSOFT_CLIENT_ID`
+
+Notes:
+
+- device-code flow does not require a client secret
+- Nolendar currently uses delegated Graph scopes for user sign-in
+- the device-code prompt will direct you to `https://microsoft.com/devicelogin`
+
+### Microsoft Environment
+
+```bash
+export MICROSOFT_CLIENT_ID=your_microsoft_app_client_id
+export MICROSOFT_GRAPH_SCOPES=Calendars.Read,User.Read
+```
+
+### Notion Integration Token
+
+1. Create a Notion integration in the Notion developer dashboard
+2. Copy the integration token
+3. Share the target Notion database/data source with that integration
+4. Export the token:
+
+```bash
+export NOTION_TOKEN=secret_xxx
+```
+
+### Outlook Calendar IDs
+
+For a first live run, you can usually start with:
+
+```yaml
+calendars:
+  - id: primary
+    name: Primary
+```
+
+If you want a non-primary calendar, you need its Graph calendar ID. Nolendar does not yet have a `list-calendars` command, so today that ID must come from Graph Explorer or another Graph client.
+
+### Notion Data Source ID
+
+The current implementation expects `notion.databaseId` to be the target Notion data source ID used for querying and page creation.
+
+If you only have the parent Notion database/container ID, you may still need the underlying data source ID. In the Notion UI, open the database settings and use the data source management UI to copy the data source ID.
+
+### Live Run Checklist
+
+Once the values are set, the usual sequence is:
+
+```bash
+npm run dev -- validate-config --config nolendar.yml
+npm run dev -- validate-notion --config nolendar.yml
+npm run dev -- sync --config nolendar.yml --dry-run
+npm run dev -- sync --config nolendar.yml --ensure-properties
+```
+
 ## Usage
 
 Run the CLI in development mode:
