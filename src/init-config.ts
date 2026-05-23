@@ -7,6 +7,8 @@ const DEFAULT_CONFIG_TEMPLATE = `microsoft:
 
 notion:
   databaseId: your_notion_data_source_id
+  defaultTags:
+    - meeting
 
 calendars:
   - id: primary
@@ -24,6 +26,8 @@ mapping:
   due: Due
   eventId: Outlook Event ID
   changeKey: Outlook ChangeKey
+  eventLink: Source URL
+  tags: Tags
 
 sync:
   lookahead: today

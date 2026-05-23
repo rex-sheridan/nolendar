@@ -91,10 +91,12 @@ function normalizeNotion(value: unknown): NotionConfig {
   const record = asRecord(value, "`notion` must be an object.");
   const databaseId = requireString(record.databaseId, "`notion.databaseId` is required.");
   const templatePageId = optionalString(record.templatePageId, "`notion.templatePageId` must be a string.");
+  const defaultTags = optionalStringArray(record.defaultTags, "`notion.defaultTags` must be an array of strings.");
 
   return {
     databaseId,
     templatePageId,
+    defaultTags,
   };
 }
 
@@ -145,6 +147,8 @@ function normalizeMapping(value: unknown): MappingConfig {
     due: optionalStringWithDefault(record.due, "Due", "`mapping.due` must be a string."),
     eventId: optionalStringWithDefault(record.eventId, "Outlook Event ID", "`mapping.eventId` must be a string."),
     changeKey: optionalStringWithDefault(record.changeKey, "Outlook ChangeKey", "`mapping.changeKey` must be a string."),
+    eventLink: optionalString(record.eventLink, "`mapping.eventLink` must be a string."),
+    tags: optionalString(record.tags, "`mapping.tags` must be a string."),
   };
 }
 
@@ -233,6 +237,18 @@ function optionalNumber(value: unknown, message: string): number | undefined {
   }
 
   if (typeof value !== "number" || Number.isNaN(value)) {
+    throw new ConfigError(message);
+  }
+
+  return value;
+}
+
+function optionalStringArray(value: unknown, message: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string" || entry.trim() === "")) {
     throw new ConfigError(message);
   }
 

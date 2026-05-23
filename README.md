@@ -61,6 +61,8 @@ Planned next:
 - Organizer
 - Attendees
 - Meeting link
+- Source URL
+- Tags
 - Status
 - Notes
 - Action items
@@ -105,6 +107,9 @@ microsoft:
 
 notion:
   databaseId: your_notion_database_id
+  defaultTags:
+    - meeting
+    - notes
 
 calendars:
   - id: primary
@@ -124,6 +129,8 @@ mapping:
   due: Due
   eventId: Outlook Event ID
   changeKey: Outlook ChangeKey
+  eventLink: Source URL
+  tags: Tags
 
 sync:
   lookahead: today
@@ -138,6 +145,7 @@ sync:
   - `interactive_browser`
   - `auth_code`
 - `notion.databaseId` is required
+- `notion.defaultTags` can be used to apply static tags to each created Notion page
 - with the current Notion API model, this value should be the target data source ID used for row queries and page creation
 - `calendars` must contain at least one calendar
 - `sync.lookahead` defaults to `today`
@@ -153,6 +161,9 @@ sync:
   - `Due`
   - `Outlook Event ID`
   - `Outlook ChangeKey`
+- optional mapping fields:
+  - `mapping.eventLink` for a Notion `url` property populated from Outlook `webLink`
+  - `mapping.tags` for a Notion `multi_select` property populated from `notion.defaultTags`
 
 ### Required Notion Properties
 
@@ -162,8 +173,39 @@ Nolendar validates the following properties on the target Notion data source:
 - date property mapped by `mapping.due`
 - rich text property mapped by `mapping.eventId`
 - rich text property mapped by `mapping.changeKey`
+- url property mapped by `mapping.eventLink`, if configured
+- multi-select property mapped by `mapping.tags`, if configured and `notion.defaultTags` is non-empty
 
 If these properties are missing, you can either create them yourself or use `--ensure-properties` with `validate-notion` or `sync`.
+
+### Notion Property Mapping
+
+Current Notion page creation supports:
+
+- title from the Outlook meeting subject
+- due date from the meeting start/end
+- event ID from the Outlook event ID
+- change key from the Outlook event `changeKey`
+- URL from the Outlook event `webLink` when `mapping.eventLink` is configured
+- tags from `notion.defaultTags` when `mapping.tags` is configured
+
+Example:
+
+```yaml
+notion:
+  databaseId: your_notion_data_source_id
+  defaultTags:
+    - meeting
+    - sync
+
+mapping:
+  title: Name
+  due: Due
+  eventId: Outlook Event ID
+  changeKey: Outlook ChangeKey
+  eventLink: Source URL
+  tags: Tags
+```
 
 ## Environment Variables
 

@@ -157,6 +157,10 @@ function propertyTypePayload(type: RequiredNotionProperty["type"]): Record<strin
       return { date: {} };
     case "rich_text":
       return { rich_text: {} };
+    case "url":
+      return { url: {} };
+    case "multi_select":
+      return { multi_select: { options: [] } };
   }
 }
 

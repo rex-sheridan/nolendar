@@ -30,6 +30,8 @@ export function buildMeetingProperties(
   maybeSetRichText(properties, dataSource, "Calendar", meeting.calendarName ?? meeting.calendarId);
   maybeSetUrl(properties, dataSource, "Meeting Link", meeting.meetingLink);
   maybeSetUrl(properties, dataSource, "Event Link", meeting.eventLink);
+  maybeSetConfiguredUrl(properties, dataSource, config.mapping.eventLink, meeting.eventLink);
+  maybeSetTags(properties, dataSource, config.mapping.tags, config.notion.defaultTags);
 
   return properties;
 }
@@ -77,6 +79,34 @@ function maybeSetUrl(
 
   properties[propertyName] = {
     url: value,
+  };
+}
+
+function maybeSetConfiguredUrl(
+  properties: Record<string, unknown>,
+  dataSource: NotionDataSourceSchema,
+  propertyName: string | undefined,
+  value?: string,
+): void {
+  if (!propertyName) {
+    return;
+  }
+
+  maybeSetUrl(properties, dataSource, propertyName, value);
+}
+
+function maybeSetTags(
+  properties: Record<string, unknown>,
+  dataSource: NotionDataSourceSchema,
+  propertyName: string | undefined,
+  tags?: string[],
+): void {
+  if (!propertyName || !tags || tags.length === 0 || dataSource.properties[propertyName]?.type !== "multi_select") {
+    return;
+  }
+
+  properties[propertyName] = {
+    multi_select: tags.map((tag) => ({ name: tag })),
   };
 }
 

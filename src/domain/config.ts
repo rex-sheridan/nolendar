@@ -10,6 +10,7 @@ export interface MicrosoftConfig {
 export interface NotionConfig {
   databaseId: string;
   templatePageId?: string;
+  defaultTags?: string[];
 }
 
 export interface CalendarConfig {
@@ -30,6 +31,8 @@ export interface MappingConfig {
   due: string;
   eventId: string;
   changeKey: string;
+  eventLink?: string;
+  tags?: string;
 }
 
 export interface SyncConfig {

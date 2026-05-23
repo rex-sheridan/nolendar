@@ -14,7 +14,7 @@ export interface NotionSchemaValidationResult {
 }
 
 export function buildRequiredNotionProperties(config: NolendarConfig): RequiredNotionProperty[] {
-  return [
+  const required: RequiredNotionProperty[] = [
     {
       name: config.mapping.title,
       type: "title",
@@ -32,6 +32,22 @@ export function buildRequiredNotionProperties(config: NolendarConfig): RequiredN
       type: "rich_text",
     },
   ];
+
+  if (config.mapping.eventLink) {
+    required.push({
+      name: config.mapping.eventLink,
+      type: "url",
+    });
+  }
+
+  if (config.mapping.tags && config.notion.defaultTags && config.notion.defaultTags.length > 0) {
+    required.push({
+      name: config.mapping.tags,
+      type: "multi_select",
+    } as RequiredNotionProperty);
+  }
+
+  return required;
 }
 
 export function validateNotionSchema(

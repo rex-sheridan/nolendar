@@ -11,6 +11,7 @@ const CONFIG: NolendarConfig = {
   },
   notion: {
     databaseId: "data-source-id",
+    defaultTags: ["meeting"],
   },
   calendars: [
     {
@@ -29,6 +30,8 @@ const CONFIG: NolendarConfig = {
     due: "Due",
     eventId: "Outlook Event ID",
     changeKey: "Outlook ChangeKey",
+    eventLink: "Source URL",
+    tags: "Tags",
   },
   sync: {
     lookahead: "today",
@@ -64,6 +67,8 @@ describe("syncMeetingsToNotion", () => {
           Due: { id: "due", name: "Due", type: "date" },
           "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
           "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
         },
       })),
       ensureProperties: vi.fn(async () => undefined),
@@ -95,6 +100,8 @@ describe("syncMeetingsToNotion", () => {
           Due: { id: "due", name: "Due", type: "date" },
           "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
           "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
         },
       })),
       ensureProperties: vi.fn(async () => undefined),
@@ -120,6 +127,8 @@ describe("syncMeetingsToNotion", () => {
           Due: { id: "due", name: "Due", type: "date" },
           "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
           "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
         },
       })),
       ensureProperties: vi.fn(async () => undefined),
@@ -145,6 +154,8 @@ describe("syncMeetingsToNotion", () => {
           Due: { id: "due", name: "Due", type: "date" },
           "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
           "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
         },
       })),
       ensureProperties: vi.fn(async () => undefined),
