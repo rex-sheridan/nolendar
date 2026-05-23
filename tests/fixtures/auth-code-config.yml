@@ -1,0 +1,10 @@
+microsoft:
+  tenant: common
+  authMode: auth_code
+
+notion:
+  databaseId: db_123
+
+calendars:
+  - id: primary
+    name: Primary

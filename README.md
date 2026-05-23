@@ -182,6 +182,14 @@ export MICROSOFT_CLIENT_SECRET=your_client_secret
 export MICROSOFT_REDIRECT_URI=http://localhost:8787/auth/callback
 ```
 
+You can also bypass Nolendar's built-in Microsoft auth flows entirely by supplying a raw bearer token:
+
+```bash
+export MICROSOFT_ACCESS_TOKEN=eyJ...
+```
+
+If `MICROSOFT_ACCESS_TOKEN` is set, Nolendar uses it directly for Microsoft Graph requests and ignores the configured Microsoft auth mode for that process.
+
 Notion API access requires one of:
 
 ```bash
@@ -211,6 +219,7 @@ To run a live end-to-end sync, you need:
 
 - optionally `MICROSOFT_CLIENT_ID`
 - optionally `MICROSOFT_CLIENT_SECRET` and `MICROSOFT_REDIRECT_URI` for `auth_code`
+- optionally `MICROSOFT_ACCESS_TOKEN` to bypass Nolendar's built-in Microsoft auth flows
 - `NOTION_TOKEN` or `NOTION_API_KEY`
 - one or more Outlook calendar IDs
 - a target Notion data source ID
@@ -327,6 +336,24 @@ Notes:
 
 You can also use `device_code` without `MICROSOFT_CLIENT_ID` to fall back to Azure Identity's development application, but `interactive_browser` is the better choice when device-code flow is blocked by app-registration policy.
 
+#### Option 4: `MICROSOFT_ACCESS_TOKEN` override
+
+Use this when you already have a short-lived Microsoft Graph bearer token from another client and want Nolendar to use it directly.
+
+Environment:
+
+```bash
+export MICROSOFT_ACCESS_TOKEN=eyJ...
+```
+
+Notes:
+
+- if `MICROSOFT_ACCESS_TOKEN` is set, it takes precedence over Nolendar's other Microsoft auth modes
+- this is useful as a developer fallback when app registration changes are blocked
+- the token is short-lived and will need to be refreshed manually
+- a common way to get such a token is from Graph Explorer's `Access token` tab after signing in and consenting to calendar permissions
+- the token must be valid for Microsoft Graph and include the permissions needed for the request, such as reading calendar events
+
 ### Notion Integration Token
 
 1. Create a Notion integration in the Notion developer dashboard
@@ -366,6 +393,13 @@ npm run dev -- validate-config --config nolendar.yml
 npm run dev -- validate-notion --config nolendar.yml
 npm run dev -- sync --config nolendar.yml --dry-run
 npm run dev -- sync --config nolendar.yml --ensure-properties
+```
+
+If you are using `MICROSOFT_ACCESS_TOKEN`, export it before running `list` or `sync`:
+
+```bash
+export MICROSOFT_ACCESS_TOKEN=eyJ...
+npm run dev -- list --config nolendar.yml --lookahead 5d
 ```
 
 ## Usage

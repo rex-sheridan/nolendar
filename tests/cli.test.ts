@@ -32,14 +32,17 @@ describe("cli", () => {
     );
   });
 
-  it("returns a non-zero exit code when list cannot authenticate", async () => {
+  it("returns a non-zero exit code when auth configuration is incomplete", async () => {
     const stdout = { log: vi.fn() };
     const stderr = { error: vi.fn() };
 
-    const exitCode = await runCli(["node", "nolendar", "list", "--config", "tests/fixtures/valid-config.yml"], {
-      stdout,
-      stderr,
-    });
+    const exitCode = await runCli(
+      ["node", "nolendar", "list", "--config", "tests/fixtures/auth-code-config.yml"],
+      {
+        stdout,
+        stderr,
+      },
+    );
 
     expect(exitCode).toBe(1);
     expect(stderr.error).toHaveBeenCalled();
