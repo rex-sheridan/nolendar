@@ -6,6 +6,7 @@ import { buildRequiredNotionProperties, validateNotionSchema } from "../src/noti
 const CONFIG: NolendarConfig = {
   microsoft: {
     tenant: "common",
+    authMode: "device_code",
   },
   notion: {
     databaseId: "data-source-id",

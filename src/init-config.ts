@@ -3,6 +3,7 @@ import path from "node:path";
 
 const DEFAULT_CONFIG_TEMPLATE = `microsoft:
   tenant: common
+  authMode: device_code
 
 notion:
   databaseId: your_notion_data_source_id

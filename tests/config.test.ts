@@ -20,6 +20,7 @@ describe("normalizeConfig", () => {
     );
 
     expect(config.microsoft.tenant).toBe("common");
+    expect(config.microsoft.authMode).toBe("device_code");
     expect(config.sync.lookahead).toBe("today");
     expect(config.sync.statePath).toBe(path.resolve("/tmp", ".nolendar/state.json"));
     expect(config.mapping.eventId).toBe("Outlook Event ID");
@@ -76,5 +77,42 @@ describe("normalizeConfig", () => {
         ],
       }),
     ).toThrowError(new ConfigError("`notion.databaseId` is required."));
+  });
+
+  it("accepts the authorization code auth mode", () => {
+    const config = normalizeConfig({
+      microsoft: {
+        tenant: "organizations",
+        authMode: "auth_code",
+      },
+      notion: {
+        databaseId: "db_123",
+      },
+      calendars: [
+        {
+          id: "team",
+        },
+      ],
+    });
+
+    expect(config.microsoft.authMode).toBe("auth_code");
+  });
+
+  it("rejects an invalid microsoft auth mode", () => {
+    expect(() =>
+      normalizeConfig({
+        microsoft: {
+          authMode: "magic",
+        },
+        notion: {
+          databaseId: "db_123",
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+      }),
+    ).toThrowError(new ConfigError("`microsoft.authMode` must be one of: device_code, auth_code."));
   });
 });

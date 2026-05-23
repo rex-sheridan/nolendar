@@ -7,6 +7,7 @@ import type {
   FiltersConfig,
   LookaheadWindow,
   MappingConfig,
+  MicrosoftAuthMode,
   NolendarConfig,
   NotionConfig,
 } from "./domain/config.js";
@@ -36,6 +37,7 @@ export function normalizeConfig(input: unknown, configPath = process.cwd()): Nol
   return {
     microsoft: {
       tenant: normalizeTenant(record.microsoft),
+      authMode: normalizeMicrosoftAuthMode(record.microsoft),
     },
     notion,
     calendars,
@@ -65,6 +67,25 @@ function normalizeTenant(value: unknown): "common" | "organizations" | "consumer
   }
 
   throw new ConfigError("`microsoft.tenant` must be one of: common, organizations, consumers.");
+}
+
+function normalizeMicrosoftAuthMode(value: unknown): MicrosoftAuthMode {
+  if (value === undefined) {
+    return "device_code";
+  }
+
+  const record = asRecord(value, "`microsoft` must be an object.");
+  const authMode = record.authMode;
+
+  if (authMode === undefined) {
+    return "device_code";
+  }
+
+  if (authMode === "device_code" || authMode === "auth_code") {
+    return authMode;
+  }
+
+  throw new ConfigError("`microsoft.authMode` must be one of: device_code, auth_code.");
 }
 
 function normalizeNotion(value: unknown): NotionConfig {

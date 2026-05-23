@@ -7,6 +7,7 @@ import { listMeetings, resolveWindow } from "../src/list.js";
 const BASE_CONFIG: NolendarConfig = {
   microsoft: {
     tenant: "common",
+    authMode: "device_code",
   },
   notion: {
     databaseId: "db_123",

@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { loadConfig } from "./config.js";
 import type { NolendarConfig } from "./domain/config.js";
 import { resolveGraphAuthConfig } from "./graph/auth.js";
+import { AuthorizationCodeTokenProvider } from "./graph/authorization-code-token-provider.js";
 import { DeviceCodeTokenProvider } from "./graph/device-code-token-provider.js";
 import { GraphMeetingSource } from "./graph/graph-meeting-source.js";
 import type { LookaheadWindow } from "./domain/config.js";
@@ -159,6 +160,11 @@ function defaultDeps(): CliDependencies {
 
 function buildGraphMeetingSource(config: NolendarConfig, deps: CliDependencies): GraphMeetingSource {
   const authConfig = resolveGraphAuthConfig(config);
+
+  if (authConfig.mode === "auth_code") {
+    return new GraphMeetingSource(new AuthorizationCodeTokenProvider(authConfig, deps.stdout));
+  }
+
   return new GraphMeetingSource(new DeviceCodeTokenProvider(authConfig, deps.stdout));
 }
 

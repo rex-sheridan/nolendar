@@ -10,7 +10,9 @@ Implemented now:
 
 - YAML config loading and validation
 - CLI commands for config validation, Notion validation, meeting listing, and sync
-- Microsoft Graph device-code authentication
+- Microsoft Graph authentication via:
+  - device code flow
+  - authorization code flow for web-style app registrations
 - Notion API integration
 - Multi-calendar meeting listing
 - Configurable lookahead windows:
@@ -80,7 +82,7 @@ Stored configuration should support:
 ## Requirements
 
 - Node.js 20+
-- A Microsoft app registration with a client ID for Graph device-code authentication
+- A Microsoft app registration for Microsoft Graph user authentication
 - Access to the Outlook calendars you want to read
 - A Notion integration token with access to the target data source
 
@@ -99,6 +101,7 @@ Example:
 ```yaml
 microsoft:
   tenant: common
+  authMode: device_code
 
 notion:
   databaseId: your_notion_database_id
@@ -130,6 +133,9 @@ sync:
 ### Config Notes
 
 - `microsoft.tenant` supports `common`, `organizations`, or `consumers`
+- `microsoft.authMode` supports:
+  - `device_code`
+  - `auth_code`
 - `notion.databaseId` is required
 - with the current Notion API model, this value should be the target data source ID used for row queries and page creation
 - `calendars` must contain at least one calendar
@@ -154,10 +160,17 @@ If these properties are missing, you can either create them yourself or use `--e
 
 ## Environment Variables
 
-Current Microsoft Graph auth uses device-code flow and requires:
+Microsoft Graph auth always requires:
 
 ```bash
 export MICROSOFT_CLIENT_ID=your_app_registration_client_id
+```
+
+For `microsoft.authMode: auth_code`, you also need:
+
+```bash
+export MICROSOFT_CLIENT_SECRET=your_client_secret
+export MICROSOFT_REDIRECT_URI=http://localhost:8787/auth/callback
 ```
 
 Notion API access requires one of:
@@ -188,13 +201,18 @@ If `MICROSOFT_GRAPH_SCOPES` is not set, Nolendar uses:
 To run a live end-to-end sync, you need:
 
 - `MICROSOFT_CLIENT_ID`
+- optionally `MICROSOFT_CLIENT_SECRET` and `MICROSOFT_REDIRECT_URI` for `auth_code`
 - `NOTION_TOKEN` or `NOTION_API_KEY`
 - one or more Outlook calendar IDs
 - a target Notion data source ID
 
 ### Microsoft App Registration
 
-Nolendar uses Microsoft Graph device-code authentication, so the app registration should be configured as a public client application.
+Nolendar supports two Microsoft auth modes.
+
+#### Option 1: `device_code`
+
+Use this if your app registration can enable public client flows.
 
 High-level steps:
 
@@ -217,12 +235,59 @@ Notes:
 - Nolendar currently uses delegated Graph scopes for user sign-in
 - the device-code prompt will direct you to `https://microsoft.com/devicelogin`
 
-### Microsoft Environment
+Microsoft config:
+
+```yaml
+microsoft:
+  tenant: common
+  authMode: device_code
+```
+
+Environment:
 
 ```bash
 export MICROSOFT_CLIENT_ID=your_microsoft_app_client_id
 export MICROSOFT_GRAPH_SCOPES=Calendars.Read,User.Read
 ```
+
+#### Option 2: `auth_code`
+
+Use this if your app registration is configured as a web app and you can create a client secret.
+
+High-level steps:
+
+1. Open the same app registration in Microsoft Entra
+2. Go to `Authentication`
+3. Under `Platform configurations`, add or confirm a `Web` platform
+4. Add a redirect URI such as `http://localhost:8787/auth/callback`
+5. Save
+6. Go to `Certificates & secrets`
+7. Create a new client secret
+8. Copy the `Application (client) ID`
+9. Copy the secret value immediately after creating it
+
+Microsoft config:
+
+```yaml
+microsoft:
+  tenant: common
+  authMode: auth_code
+```
+
+Environment:
+
+```bash
+export MICROSOFT_CLIENT_ID=your_microsoft_app_client_id
+export MICROSOFT_CLIENT_SECRET=your_client_secret
+export MICROSOFT_REDIRECT_URI=http://localhost:8787/auth/callback
+export MICROSOFT_GRAPH_SCOPES=Calendars.Read,User.Read
+```
+
+Notes:
+
+- `MICROSOFT_REDIRECT_URI` must exactly match a redirect URI registered on the app
+- the current implementation requires a localhost HTTP redirect URI for the CLI callback listener
+- Nolendar will open a browser for sign-in and wait for the redirect back to the local callback URL
 
 ### Notion Integration Token
 
@@ -369,6 +434,8 @@ Meetings for today from 2 configured calendar(s) between 2026-05-22T00:00:00.000
 
 When using device-code auth, Microsoft will prompt you in the terminal to open `https://microsoft.com/devicelogin` and enter a code.
 
+When using `auth_code`, Nolendar opens a browser for Microsoft sign-in and listens for the redirect back to `MICROSOFT_REDIRECT_URI`.
+
 ### Current Sync Behavior
 
 The current sync implementation:
@@ -417,6 +484,7 @@ This project is designed around:
 - [`msgraph-sdk-typescript`](https://github.com/microsoftgraph/msgraph-sdk-typescript) for Microsoft Graph API access
 - [`notion-sdk-js`](https://github.com/makenotion/notion-sdk-js) for Notion API access
 - [`@azure/identity`](https://www.npmjs.com/package/@azure/identity) for Microsoft device-code authentication
+- [`@azure/msal-node`](https://www.npmjs.com/package/@azure/msal-node) for Microsoft authorization-code authentication
 - [`commander`](https://www.npmjs.com/package/commander) for the CLI
 - [`yaml`](https://www.npmjs.com/package/yaml) for config parsing
 

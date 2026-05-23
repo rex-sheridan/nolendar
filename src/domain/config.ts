@@ -1,7 +1,10 @@
+export type MicrosoftAuthMode = "device_code" | "auth_code";
+
 export type LookaheadWindow = "today" | "24h" | "7d";
 
 export interface MicrosoftConfig {
   tenant: "common" | "organizations" | "consumers";
+  authMode: MicrosoftAuthMode;
 }
 
 export interface NotionConfig {

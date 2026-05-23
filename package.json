@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@azure/identity": "^4.13.0",
+    "@azure/msal-node": "^3.8.3",
     "@notionhq/client": "^5.20.0",
     "commander": "^14.0.0",
     "yaml": "^2.8.1"
