@@ -10,10 +10,17 @@ export interface MicrosoftConfig {
 export interface NotionConfig {
   databaseId: string;
   templatePageId?: string;
+  dataSourceTemplate?: NotionDataSourceTemplateConfig;
   defaultTags?: string[];
   defaultAssigneeEmail?: string;
   pageIcon?: NotionPageIconConfig;
   peopleDataSource?: NotionPeopleDataSourceConfig;
+}
+
+export interface NotionDataSourceTemplateConfig {
+  type: "default" | "template_id";
+  templateId?: string;
+  timezone?: string;
 }
 
 export interface NotionPeopleDataSourceConfig {

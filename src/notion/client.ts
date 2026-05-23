@@ -5,6 +5,7 @@ import type { NotionDataSourceSchema, NotionPageRecord, RequiredNotionProperty }
 export interface NotionClient {
   retrieveDataSource(dataSourceId: string): Promise<NotionDataSourceSchema>;
   getDefaultAssigneeUserId(defaultAssigneeEmail?: string): Promise<string | undefined>;
+  getTemplateBlocks(templatePageId: string): Promise<unknown[]>;
   ensureProperties(dataSourceId: string, properties: RequiredNotionProperty[]): Promise<void>;
   findPageByEventId(args: {
     dataSourceId: string;

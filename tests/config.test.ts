@@ -69,6 +69,30 @@ describe("normalizeConfig", () => {
     expect(config.mapping.participants).toBe("Participants");
   });
 
+  it("accepts a true data source template configuration", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        dataSourceTemplate: {
+          type: "template_id",
+          templateId: "template-123",
+          timezone: "America/New_York",
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+    });
+
+    expect(config.notion.dataSourceTemplate).toEqual({
+      type: "template_id",
+      templateId: "template-123",
+      timezone: "America/New_York",
+    });
+  });
+
   it("accepts an emoji page icon", () => {
     const config = normalizeConfig({
       notion: {
@@ -221,6 +245,45 @@ describe("normalizeConfig", () => {
         ],
       }),
     ).toThrowError(new ConfigError("`mapping.participants` is required when `notion.peopleDataSource` is configured."));
+  });
+
+  it("rejects a template_id data source template without templateId", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+          dataSourceTemplate: {
+            type: "template_id",
+          },
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+      }),
+    ).toThrowError(
+      new ConfigError("`notion.dataSourceTemplate.templateId` is required when template type is `template_id`."),
+    );
+  });
+
+  it("rejects simultaneous page-copy and true template configuration", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+          templatePageId: "page-123",
+          dataSourceTemplate: {
+            type: "default",
+          },
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+      }),
+    ).toThrowError(new ConfigError("`notion.templatePageId` and `notion.dataSourceTemplate` are mutually exclusive."));
   });
 
   it("accepts the authorization code auth mode", () => {

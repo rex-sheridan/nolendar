@@ -35,6 +35,7 @@ export function normalizeConfig(input: unknown, configPath = process.cwd()): Nol
   const lookahead = normalizeLookahead(record.sync);
 
   validateParticipantConfig(notion, mapping);
+  validateTemplateConfig(notion);
 
   return {
     microsoft: {
@@ -94,6 +95,7 @@ function normalizeNotion(value: unknown): NotionConfig {
   const record = asRecord(value, "`notion` must be an object.");
   const databaseId = requireString(record.databaseId, "`notion.databaseId` is required.");
   const templatePageId = optionalString(record.templatePageId, "`notion.templatePageId` must be a string.");
+  const dataSourceTemplate = normalizeDataSourceTemplate(record.dataSourceTemplate);
   const defaultTags = optionalStringArray(record.defaultTags, "`notion.defaultTags` must be an array of strings.");
   const defaultAssigneeEmail = optionalString(
     record.defaultAssigneeEmail,
@@ -105,6 +107,7 @@ function normalizeNotion(value: unknown): NotionConfig {
   return {
     databaseId,
     templatePageId,
+    dataSourceTemplate,
     defaultTags,
     defaultAssigneeEmail,
     pageIcon,
@@ -317,6 +320,38 @@ function normalizePeopleDataSource(value: unknown): NotionConfig["peopleDataSour
   };
 }
 
+function normalizeDataSourceTemplate(value: unknown): NotionConfig["dataSourceTemplate"] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const record = asRecord(value, "`notion.dataSourceTemplate` must be an object.");
+  const type = requireString(record.type, "`notion.dataSourceTemplate.type` is required.");
+
+  if (type !== "default" && type !== "template_id") {
+    throw new ConfigError("`notion.dataSourceTemplate.type` must be one of: default, template_id.");
+  }
+
+  const templateId = optionalString(
+    record.templateId,
+    "`notion.dataSourceTemplate.templateId` must be a string.",
+  );
+
+  if (type === "template_id" && !templateId) {
+    throw new ConfigError("`notion.dataSourceTemplate.templateId` is required when template type is `template_id`.");
+  }
+
+  if (type === "default" && templateId !== undefined) {
+    throw new ConfigError("`notion.dataSourceTemplate.templateId` must not be set when template type is `default`.");
+  }
+
+  return {
+    type,
+    templateId,
+    timezone: optionalString(record.timezone, "`notion.dataSourceTemplate.timezone` must be a string."),
+  };
+}
+
 function validateParticipantConfig(notion: NotionConfig, mapping: MappingConfig): void {
   const hasPeopleDataSource = notion.peopleDataSource !== undefined;
   const hasParticipantsMapping = mapping.participants !== undefined;
@@ -330,4 +365,10 @@ function validateParticipantConfig(notion: NotionConfig, mapping: MappingConfig)
   }
 
   throw new ConfigError("`notion.peopleDataSource` is required when `mapping.participants` is configured.");
+}
+
+function validateTemplateConfig(notion: NotionConfig): void {
+  if (notion.templatePageId && notion.dataSourceTemplate) {
+    throw new ConfigError("`notion.templatePageId` and `notion.dataSourceTemplate` are mutually exclusive.");
+  }
 }

@@ -5,6 +5,12 @@ import { ApiNotionClient } from "../src/notion/api-notion-client.js";
 describe("ApiNotionClient.getDefaultAssigneeUserId", () => {
   it("resolves a people property assignee from defaultAssigneeEmail", async () => {
     const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
       dataSources: {
         retrieve: vi.fn(),
         update: vi.fn(),
@@ -40,6 +46,12 @@ describe("ApiNotionClient.getDefaultAssigneeUserId", () => {
 
   it("falls back to the authenticated user when email lookup does not match", async () => {
     const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
       dataSources: {
         retrieve: vi.fn(),
         update: vi.fn(),
@@ -73,6 +85,12 @@ describe("ApiNotionClient page icon writes", () => {
       update: vi.fn(async () => undefined),
     };
     const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
       dataSources: {
         retrieve: vi.fn(),
         update: vi.fn(),
@@ -151,6 +169,12 @@ describe("ApiNotionClient page icon writes", () => {
       update: vi.fn(async () => undefined),
     };
     const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
       dataSources: {
         retrieve: vi.fn(),
         update: vi.fn(),
@@ -254,6 +278,12 @@ describe("ApiNotionClient page icon writes", () => {
       update: vi.fn(async () => undefined),
     };
     const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
       dataSources,
       pages,
       users: {
@@ -368,5 +398,348 @@ describe("ApiNotionClient page icon writes", () => {
         }),
       }),
     );
+  });
+
+  it("prepends configured template blocks when creating a meeting page", async () => {
+    const blocks = {
+      children: {
+        append: vi.fn(async () => undefined),
+        list: vi.fn(async ({ block_id }: { block_id: string }) => {
+          if (block_id === "template-page-id") {
+            return {
+              results: [
+                {
+                  id: "block-1",
+                  object: "block",
+                  type: "heading_1",
+                  has_children: false,
+                  heading_1: {
+                    rich_text: [
+                      {
+                        type: "text",
+                        text: {
+                          content: "Template Heading",
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+              has_more: false,
+              next_cursor: null,
+            };
+          }
+
+          return {
+            results: [],
+            has_more: false,
+            next_cursor: null,
+          };
+        }),
+      },
+    };
+    const pages = {
+      create: vi.fn(async () => ({ id: "page-1" })),
+      update: vi.fn(async () => undefined),
+    };
+    const client = new ApiNotionClient("token", {
+      blocks,
+      dataSources: {
+        retrieve: vi.fn(),
+        update: vi.fn(),
+        query: vi.fn(),
+      },
+      pages,
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.createMeetingPage({
+      config: {
+        microsoft: { tenant: "common", authMode: "device_code" },
+        notion: {
+          databaseId: "data-source-id",
+          templatePageId: "template-page-id",
+        },
+        calendars: [],
+        filters: {
+          ignoreDeclined: true,
+          requireAttendees: false,
+          ignorePersonal: false,
+          ignoreOptionalAttendance: false,
+        },
+        mapping: {
+          title: "Name",
+          due: "Due",
+          eventId: "Outlook Event ID",
+          changeKey: "Outlook ChangeKey",
+        },
+        sync: {
+          lookahead: "today",
+          statePath: "/tmp/.nolendar/state.json",
+        },
+      },
+      dataSource: {
+        id: "data-source-id",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+        },
+      },
+      meeting: {
+        id: "evt-1",
+        changeKey: "ck-1",
+        calendarId: "primary",
+        title: "Planning",
+        start: "2026-05-22T13:00:00.000Z",
+        end: "2026-05-22T14:00:00.000Z",
+        attendees: [],
+        isCancelled: false,
+        isRecurring: false,
+      },
+    });
+
+    expect(pages.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        children: expect.arrayContaining([
+          expect.objectContaining({
+            type: "heading_1",
+            heading_1: expect.objectContaining({
+              rich_text: [
+                expect.objectContaining({
+                  text: expect.objectContaining({
+                    content: "Template Heading",
+                  }),
+                }),
+              ],
+            }),
+          }),
+        ]),
+      }),
+    );
+    expect(blocks.children.list).toHaveBeenCalledWith({
+      block_id: "template-page-id",
+      start_cursor: undefined,
+      page_size: 100,
+    });
+  });
+
+  it("uses the default Notion data source template and appends generated meeting blocks after create", async () => {
+    const blocks = {
+      children: {
+        append: vi.fn(async () => undefined),
+        list: vi.fn(async () => ({
+          results: [
+            {
+              id: "template-block-1",
+              object: "block",
+              type: "paragraph",
+              paragraph: {
+                rich_text: [],
+              },
+            },
+          ],
+          has_more: false,
+          next_cursor: null,
+        })),
+      },
+    };
+    const pages = {
+      create: vi.fn(async () => ({ id: "page-1" })),
+      update: vi.fn(async () => undefined),
+    };
+    const client = new ApiNotionClient("token", {
+      blocks,
+      dataSources: {
+        retrieve: vi.fn(),
+        update: vi.fn(),
+        query: vi.fn(),
+      },
+      pages,
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.createMeetingPage({
+      config: {
+        microsoft: { tenant: "common", authMode: "device_code" },
+        notion: {
+          databaseId: "data-source-id",
+          dataSourceTemplate: {
+            type: "default",
+          },
+        },
+        calendars: [],
+        filters: {
+          ignoreDeclined: true,
+          requireAttendees: false,
+          ignorePersonal: false,
+          ignoreOptionalAttendance: false,
+        },
+        mapping: {
+          title: "Name",
+          due: "Due",
+          eventId: "Outlook Event ID",
+          changeKey: "Outlook ChangeKey",
+        },
+        sync: {
+          lookahead: "today",
+          statePath: "/tmp/.nolendar/state.json",
+        },
+      },
+      dataSource: {
+        id: "data-source-id",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+        },
+      },
+      meeting: {
+        id: "evt-1",
+        changeKey: "ck-1",
+        calendarId: "primary",
+        title: "Planning",
+        start: "2026-05-22T13:00:00.000Z",
+        end: "2026-05-22T14:00:00.000Z",
+        attendees: [],
+        meetingLink: "https://teams.microsoft.com/l/meetup-join/test",
+        eventLink: "https://outlook.office.com/calendar/item/test",
+        details: "Agenda and body content",
+        isCancelled: false,
+        isRecurring: false,
+      },
+    });
+
+    expect(pages.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parent: {
+          data_source_id: "data-source-id",
+        },
+        template: {
+          type: "default",
+        },
+        children: undefined,
+      }),
+    );
+    expect(blocks.children.append).toHaveBeenCalledWith({
+      block_id: "page-1",
+      children: expect.arrayContaining([
+        expect.objectContaining({
+          type: "heading_2",
+        }),
+      ]),
+    });
+  });
+
+  it("uses a specific Notion data source template id when configured", async () => {
+    const blocks = {
+      children: {
+        append: vi.fn(async () => undefined),
+        list: vi.fn(async () => ({
+          results: [
+            {
+              id: "template-block-1",
+              object: "block",
+              type: "paragraph",
+              paragraph: {
+                rich_text: [],
+              },
+            },
+          ],
+          has_more: false,
+          next_cursor: null,
+        })),
+      },
+    };
+    const pages = {
+      create: vi.fn(async () => ({ id: "page-1" })),
+      update: vi.fn(async () => undefined),
+    };
+    const client = new ApiNotionClient("token", {
+      blocks,
+      dataSources: {
+        retrieve: vi.fn(),
+        update: vi.fn(),
+        query: vi.fn(),
+      },
+      pages,
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.createMeetingPage({
+      config: {
+        microsoft: { tenant: "common", authMode: "device_code" },
+        notion: {
+          databaseId: "data-source-id",
+          dataSourceTemplate: {
+            type: "template_id",
+            templateId: "template-123",
+            timezone: "America/New_York",
+          },
+        },
+        calendars: [],
+        filters: {
+          ignoreDeclined: true,
+          requireAttendees: false,
+          ignorePersonal: false,
+          ignoreOptionalAttendance: false,
+        },
+        mapping: {
+          title: "Name",
+          due: "Due",
+          eventId: "Outlook Event ID",
+          changeKey: "Outlook ChangeKey",
+        },
+        sync: {
+          lookahead: "today",
+          statePath: "/tmp/.nolendar/state.json",
+        },
+      },
+      dataSource: {
+        id: "data-source-id",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+        },
+      },
+      meeting: {
+        id: "evt-1",
+        changeKey: "ck-1",
+        calendarId: "primary",
+        title: "Planning",
+        start: "2026-05-22T13:00:00.000Z",
+        end: "2026-05-22T14:00:00.000Z",
+        attendees: [],
+        isCancelled: false,
+        isRecurring: false,
+      },
+    });
+
+    expect(pages.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template: {
+          type: "template_id",
+          template_id: "template-123",
+          timezone: "America/New_York",
+        },
+      }),
+    );
+    expect(blocks.children.append).toHaveBeenCalledWith({
+      block_id: "page-1",
+      children: expect.any(Array),
+    });
   });
 });

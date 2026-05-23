@@ -25,6 +25,9 @@ Implemented now:
 - Idempotent initial sync using Outlook event ID and `changeKey`
 - Incremental sync using Microsoft Graph calendar-view delta queries
 - Local sync state persistence in `.nolendar/state.json`
+- Two template modes for new meeting pages:
+  - copied page blocks from `notion.templatePageId`
+  - native Notion data source templates via `notion.dataSourceTemplate`
 - Sync filtering for:
   - declined meetings
   - minimum meeting duration
@@ -39,7 +42,6 @@ Implemented now:
 Planned next:
 
 - Recurring meeting sync hardening
-- Template-based page creation
 
 ## Planned Features
 
@@ -112,6 +114,12 @@ microsoft:
 
 notion:
   databaseId: your_notion_database_id
+  # Choose at most one template mode:
+  # templatePageId: your_template_page_id
+  # dataSourceTemplate:
+  #   type: default
+  #   # templateId: your_data_source_template_id
+  #   # timezone: America/New_York
   peopleDataSource:
     databaseId: your_people_data_source_id
     nameProperty: Name
@@ -160,6 +168,14 @@ sync:
   - `interactive_browser`
   - `auth_code`
 - `notion.databaseId` is required
+- `notion.templatePageId` copies the child blocks from a normal Notion page into each newly created meeting page
+- `notion.dataSourceTemplate` uses Notion's first-class data source template support when creating new pages
+- `notion.templatePageId` and `notion.dataSourceTemplate` are mutually exclusive
+- `notion.dataSourceTemplate.type` supports:
+  - `default`
+  - `template_id`
+- `notion.dataSourceTemplate.templateId` is required when `type` is `template_id`
+- `notion.dataSourceTemplate.timezone` is optional and controls timezone-sensitive template variables like `@now` and `@today`
 - `notion.peopleDataSource` can be configured when you want attendee rows created or linked from a separate Notion People data source
 - `notion.peopleDataSource.nameProperty` defaults to `Name`
 - `notion.peopleDataSource.emailProperty` defaults to `Email Address`
@@ -186,6 +202,42 @@ sync:
 - `mapping.tags` for a Notion `multi_select` property populated from `notion.defaultTags`
 - `mapping.assignee` for a Notion `people` property populated from the authenticated Notion user
 - `mapping.participants` for a Notion `relation` property populated from meeting attendees and linked to `notion.peopleDataSource`
+
+### Template Modes
+
+Nolendar supports two separate ways to start new meeting pages with reusable content:
+
+- `notion.templatePageId`
+  - copies the blocks from a normal Notion page and prepends them to Nolendar's generated meeting sections
+  - this is useful when you want a simple reusable page body without using Notion's data source template mechanism
+- `notion.dataSourceTemplate`
+  - uses Notion's native data source template support during page creation
+  - Nolendar waits briefly for the template to apply, then appends its generated meeting sections
+  - this is the right option when you want a real Notion template from the data source's `New` menu
+
+Examples:
+
+```yaml
+notion:
+  databaseId: your_notion_data_source_id
+  templatePageId: 36986680-d5d6-813d-8235-c37663edd559
+```
+
+```yaml
+notion:
+  databaseId: your_notion_data_source_id
+  dataSourceTemplate:
+    type: default
+```
+
+```yaml
+notion:
+  databaseId: your_notion_data_source_id
+  dataSourceTemplate:
+    type: template_id
+    templateId: a5da15f6-b853-455d-8827-f906fb52db2b
+    timezone: America/New_York
+```
 
 ### Required Notion Properties
 
@@ -234,6 +286,7 @@ Current Notion page creation supports:
 - otherwise assignee from the authenticated Notion identity when `mapping.assignee` is configured
 - participants from Outlook attendees when `mapping.participants` and `notion.peopleDataSource` are configured
 - static page icons via `notion.pageIcon`
+- template page blocks from `notion.templatePageId` when configured
 - meeting body content from the full Outlook event body when available, otherwise `bodyPreview`
 - Teams join link extraction from the Outlook event body when Graph does not return `onlineMeeting.joinUrl`
 
@@ -247,6 +300,7 @@ Participants behavior:
 
 Current Notion page body content includes:
 
+- copied template page blocks first when `notion.templatePageId` is configured
 - a `Meeting Link` section when a meeting join URL is available
 - a `Calendar Event` section when the Outlook `webLink` is available
 - a `Meeting Details` section populated from the event body text
@@ -705,7 +759,6 @@ The current sync implementation:
 Not implemented yet:
 
 - recurring meeting edge-case hardening
-- template-page cloning
 - MCP-based Notion integration
 
 ## Idempotency

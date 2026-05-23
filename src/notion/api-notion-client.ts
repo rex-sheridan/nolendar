@@ -7,8 +7,16 @@ import type { NotionClient } from "./client.js";
 import { buildMeetingChildren, buildMeetingProperties } from "./page-payload.js";
 
 const NOTION_API_VERSION = "2026-03-11";
+const TEMPLATE_READY_POLL_INTERVAL_MS = 250;
+const TEMPLATE_READY_MAX_POLLS = 8;
 
 interface NotionSdkClient {
+  blocks: {
+    children: {
+      append(args: { block_id: string; children: unknown[] }): Promise<unknown>;
+      list(args: { block_id: string; start_cursor?: string; page_size?: number }): Promise<unknown>;
+    };
+  };
   dataSources: {
     retrieve(args: { data_source_id: string }): Promise<unknown>;
     update(args: { data_source_id: string; properties: Record<string, unknown> }): Promise<unknown>;
@@ -28,6 +36,7 @@ export class ApiNotionClient implements NotionClient {
   private readonly client: NotionSdkClient;
   private readonly defaultAssigneeCache = new Map<string, string | undefined>();
   private readonly participantPageCache = new Map<string, string>();
+  private readonly templateBlockCache = new Map<string, unknown[]>();
 
   constructor(authToken: string, client?: NotionSdkClient) {
     this.client =
@@ -93,6 +102,17 @@ export class ApiNotionClient implements NotionClient {
     return resolvedUserId;
   }
 
+  async getTemplateBlocks(templatePageId: string): Promise<unknown[]> {
+    if (this.templateBlockCache.has(templatePageId)) {
+      return this.templateBlockCache.get(templatePageId) ?? [];
+    }
+
+    const blocks = await this.listBlockChildren(templatePageId);
+    const sanitizedBlocks = await Promise.all(blocks.map((block) => this.sanitizeBlockForCreate(block)));
+    this.templateBlockCache.set(templatePageId, sanitizedBlocks);
+    return sanitizedBlocks;
+  }
+
   async ensureProperties(dataSourceId: string, properties: RequiredNotionProperty[]): Promise<void> {
     if (properties.length === 0) {
       return;
@@ -156,20 +176,36 @@ export class ApiNotionClient implements NotionClient {
       ? await this.getDefaultAssigneeUserId(args.config.notion.defaultAssigneeEmail)
       : undefined;
     const participantPageIds = await this.resolveParticipantPageIds(args.config, args.meeting);
+    const properties = buildMeetingProperties(args.config, args.dataSource, args.meeting, {
+      assigneeUserId,
+      participantPageIds,
+    });
+    const meetingChildren = buildMeetingChildren(args.meeting);
+    const templateBlocks = args.config.notion.templatePageId
+      ? await this.getTemplateBlocks(args.config.notion.templatePageId)
+      : [];
+    const dataSourceTemplate = buildDataSourceTemplatePayload(args.config);
     const response = (await this.client.pages.create({
       parent: {
         data_source_id: args.dataSource.id,
       },
-      properties: buildMeetingProperties(args.config, args.dataSource, args.meeting, {
-        assigneeUserId,
-        participantPageIds,
-      }),
+      properties,
       icon: buildPageIcon(args.config),
-      children: buildMeetingChildren(args.meeting),
+      template: dataSourceTemplate,
+      children: dataSourceTemplate ? undefined : [...templateBlocks, ...meetingChildren],
     })) as { id?: string };
+    const pageId = response.id ?? "";
+
+    if (pageId && dataSourceTemplate) {
+      await this.waitForTemplateReady(pageId);
+      await this.client.blocks.children.append({
+        block_id: pageId,
+        children: meetingChildren,
+      });
+    }
 
     return {
-      id: response.id ?? "",
+      id: pageId,
     };
   }
 
@@ -318,6 +354,86 @@ export class ApiNotionClient implements NotionClient {
 
     return response.id ?? "";
   }
+
+  private async listBlockChildren(blockId: string): Promise<Array<Record<string, unknown>>> {
+    const blocks: Array<Record<string, unknown>> = [];
+    let nextCursor: string | undefined;
+
+    do {
+      const response = (await this.client.blocks.children.list({
+        block_id: blockId,
+        start_cursor: nextCursor,
+        page_size: 100,
+      })) as {
+        results?: Array<Record<string, unknown>>;
+        next_cursor?: string | null;
+        has_more?: boolean;
+      };
+
+      blocks.push(...(response.results ?? []));
+      nextCursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+    } while (nextCursor);
+
+    return blocks;
+  }
+
+  private async sanitizeBlockForCreate(block: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const sanitized: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(block)) {
+      if (
+        key === "id" ||
+        key === "parent" ||
+        key === "created_time" ||
+        key === "last_edited_time" ||
+        key === "created_by" ||
+        key === "last_edited_by" ||
+        key === "archived" ||
+        key === "in_trash" ||
+        key === "has_children"
+      ) {
+        continue;
+      }
+
+      sanitized[key] = value;
+    }
+
+    const blockType = typeof sanitized.type === "string" ? sanitized.type : undefined;
+    if (!blockType) {
+      return sanitized;
+    }
+
+    const typedPayload = sanitized[blockType];
+    if (!typedPayload || typeof typedPayload !== "object" || Array.isArray(typedPayload)) {
+      return sanitized;
+    }
+
+    const typedRecord = { ...(typedPayload as Record<string, unknown>) };
+
+    if ((block.type as string | undefined) && (block as { has_children?: boolean }).has_children) {
+      typedRecord.children = await this.listAndSanitizeNestedChildren(block.id as string);
+    }
+
+    sanitized[blockType] = typedRecord;
+    return sanitized;
+  }
+
+  private async listAndSanitizeNestedChildren(blockId: string): Promise<unknown[]> {
+    const childBlocks = await this.listBlockChildren(blockId);
+    return Promise.all(childBlocks.map((child) => this.sanitizeBlockForCreate(child)));
+  }
+
+  private async waitForTemplateReady(pageId: string): Promise<void> {
+    for (let attempt = 0; attempt < TEMPLATE_READY_MAX_POLLS; attempt += 1) {
+      const children = await this.listBlockChildren(pageId);
+
+      if (children.length > 0) {
+        return;
+      }
+
+      await delay(TEMPLATE_READY_POLL_INTERVAL_MS);
+    }
+  }
 }
 
 function normalizeProperties(
@@ -397,4 +513,29 @@ function textBlock(content: string): { type: "text"; text: { content: string } }
       content,
     },
   };
+}
+
+function buildDataSourceTemplatePayload(config: NolendarConfig): Record<string, unknown> | undefined {
+  const template = config.notion.dataSourceTemplate;
+
+  if (!template) {
+    return undefined;
+  }
+
+  if (template.type === "default") {
+    return {
+      type: "default",
+      ...(template.timezone ? { timezone: template.timezone } : {}),
+    };
+  }
+
+  return {
+    type: "template_id",
+    template_id: template.templateId,
+    ...(template.timezone ? { timezone: template.timezone } : {}),
+  };
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }

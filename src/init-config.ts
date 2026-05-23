@@ -7,6 +7,12 @@ const DEFAULT_CONFIG_TEMPLATE = `microsoft:
 
 notion:
   databaseId: your_notion_data_source_id
+  # Choose at most one template mode:
+  # templatePageId: your_template_page_id
+  # dataSourceTemplate:
+  #   type: default
+  #   # templateId: your_data_source_template_id
+  #   # timezone: America/New_York
   peopleDataSource:
     databaseId: your_people_data_source_id
     nameProperty: Name
