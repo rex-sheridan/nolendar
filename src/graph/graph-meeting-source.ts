@@ -8,6 +8,8 @@ const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
 const MAX_THROTTLE_RETRIES = 3;
 
 export class GraphMeetingSource implements MeetingSource {
+  private currentUserEmailPromise?: Promise<string | undefined>;
+
   constructor(
     private readonly accessTokenProvider: AccessTokenProvider,
     private readonly fetchImpl: typeof fetch = fetch,
@@ -15,11 +17,12 @@ export class GraphMeetingSource implements MeetingSource {
 
   async listMeetings(args: { calendar: CalendarConfig; window: CalendarWindow }): Promise<Meeting[]> {
     const accessToken = await this.accessTokenProvider.getAccessToken();
+    const currentUserEmail = await this.getCurrentUserEmail(accessToken);
     const payload = await fetchGraphPayload(this.fetchImpl, buildCalendarViewUrl(args.calendar.id, args.window), accessToken);
 
     return (payload.value ?? [])
       .filter(isSyncableCalendarViewEvent)
-      .map((event) => normalizeGraphEvent(event, args.calendar));
+      .map((event) => normalizeGraphEvent(event, args.calendar, { currentUserEmail }));
   }
 
   async listMeetingChanges(args: {
@@ -28,6 +31,7 @@ export class GraphMeetingSource implements MeetingSource {
     deltaLink?: string;
   }): Promise<{ meetings: Meeting[]; removedEventIds: string[]; deltaLink?: string }> {
     const accessToken = await this.accessTokenProvider.getAccessToken();
+    const currentUserEmail = await this.getCurrentUserEmail(accessToken);
     let nextUrl: URL | undefined = args.deltaLink
       ? new URL(args.deltaLink)
       : buildCalendarViewDeltaUrl(args.calendar.id, args.window);
@@ -54,7 +58,7 @@ export class GraphMeetingSource implements MeetingSource {
         }
 
         const hydratedEvent = await this.hydrateGraphEvent(args.calendar.id, event, accessToken);
-        meetings.push(normalizeGraphEvent(hydratedEvent, args.calendar));
+        meetings.push(normalizeGraphEvent(hydratedEvent, args.calendar, { currentUserEmail }));
       }
       nextUrl = payload["@odata.nextLink"] ? new URL(payload["@odata.nextLink"]) : undefined;
       deltaLink = payload["@odata.deltaLink"] ?? deltaLink;
@@ -85,6 +89,11 @@ export class GraphMeetingSource implements MeetingSource {
       ...hydratedEvent,
     } as GraphEvent;
   }
+
+  private async getCurrentUserEmail(accessToken: string): Promise<string | undefined> {
+    this.currentUserEmailPromise ??= fetchCurrentUserEmail(this.fetchImpl, accessToken);
+    return this.currentUserEmailPromise;
+  }
 }
 
 function buildCalendarViewUrl(calendarId: string, window: CalendarWindow): URL {
@@ -111,6 +120,12 @@ function buildEventUrl(calendarId: string, eventId: string): URL {
   return url;
 }
 
+function buildCurrentUserUrl(): URL {
+  const url = new URL(`${GRAPH_BASE_URL}/me`);
+  url.searchParams.set("$select", "mail,userPrincipalName");
+  return url;
+}
+
 async function fetchGraphPayload(
   fetchImpl: typeof fetch,
   url: URL,
@@ -119,6 +134,22 @@ async function fetchGraphPayload(
     maxPageSize?: number;
   } = {},
 ): Promise<{ value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string }> {
+  return fetchGraphObject<{ value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string }>(
+    fetchImpl,
+    url,
+    accessToken,
+    options,
+  );
+}
+
+async function fetchGraphObject<T>(
+  fetchImpl: typeof fetch,
+  url: URL,
+  accessToken: string,
+  options: {
+    maxPageSize?: number;
+  } = {},
+): Promise<T> {
   const preferHeaders = ['outlook.timezone="UTC"'];
 
   if (options.maxPageSize !== undefined) {
@@ -135,7 +166,7 @@ async function fetchGraphPayload(
     });
 
     if (response.ok) {
-      return (await response.json()) as { value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string };
+      return (await response.json()) as T;
     }
 
     if (response.status === 429 && attempt < MAX_THROTTLE_RETRIES) {
@@ -178,6 +209,16 @@ function isSyncableCalendarViewEvent(event: GraphEvent): boolean {
   return event.type !== "seriesMaster";
 }
 
+async function fetchCurrentUserEmail(fetchImpl: typeof fetch, accessToken: string): Promise<string | undefined> {
+  const response = await fetchGraphObject<{ mail?: string | null; userPrincipalName?: string | null }>(
+    fetchImpl,
+    buildCurrentUserUrl(),
+    accessToken,
+  );
+  const email = response.mail?.trim() || response.userPrincipalName?.trim();
+  return email ? email.toLowerCase() : undefined;
+}
+
 function graphEventSelect(): string {
   return [
     "id",
@@ -193,19 +234,28 @@ function graphEventSelect(): string {
     "bodyPreview",
     "body",
     "responseStatus",
+    "sensitivity",
+    "isOrganizer",
     "type",
     "isCancelled",
     "recurrence",
   ].join(",");
 }
 
-export function normalizeGraphEvent(event: GraphEvent, calendar: CalendarConfig): Meeting {
+export function normalizeGraphEvent(
+  event: GraphEvent,
+  calendar: CalendarConfig,
+  options: {
+    currentUserEmail?: string;
+  } = {},
+): Meeting {
   const id = required(event.id, "Graph event is missing `id`.");
   const changeKey = required(event.changeKey, `Graph event ${id} is missing \`changeKey\`.`);
   const start = normalizeGraphDateTime(event.start, `Graph event ${id} is missing \`start.dateTime\`.`);
   const end = normalizeGraphDateTime(event.end, `Graph event ${id} is missing \`end.dateTime\`.`);
   const details = normalizeBodyText(event.body?.content, event.body?.contentType) ?? event.bodyPreview ?? undefined;
   const fallbackMeetingLink = extractMeetingLink(event.body?.content);
+  const isOrganizer = Boolean(event.isOrganizer);
 
   return {
     id,
@@ -227,9 +277,24 @@ export function normalizeGraphEvent(event: GraphEvent, calendar: CalendarConfig)
     agenda: event.bodyPreview ?? undefined,
     details,
     responseStatus: event.responseStatus?.response ?? undefined,
+    sensitivity: event.sensitivity ?? undefined,
+    isOrganizer,
+    isOptionalForOwner: determineOptionalAttendance(event, options.currentUserEmail),
     isCancelled: Boolean(event.isCancelled),
     isRecurring: event.type === "seriesMaster" || event.type === "occurrence" || event.recurrence != null,
   };
+}
+
+function determineOptionalAttendance(event: GraphEvent, currentUserEmail?: string): boolean {
+  if (event.isOrganizer || !currentUserEmail) {
+    return false;
+  }
+
+  const ownerAttendee = event.attendees?.find(
+    (attendee) => attendee.emailAddress?.address?.trim().toLowerCase() === currentUserEmail,
+  );
+
+  return ownerAttendee?.type?.toLowerCase() === "optional";
 }
 
 function required(value: string | null | undefined, message: string): string {

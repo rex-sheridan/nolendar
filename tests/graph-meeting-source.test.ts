@@ -87,6 +87,9 @@ describe("normalizeGraphEvent", () => {
       agenda: "Discuss roadmap",
       details: "Discuss roadmap\nJoin Teams",
       responseStatus: "accepted",
+      sensitivity: undefined,
+      isOrganizer: false,
+      isOptionalForOwner: false,
       isCancelled: false,
       isRecurring: true,
     });
@@ -95,33 +98,43 @@ describe("normalizeGraphEvent", () => {
 
 describe("GraphMeetingSource", () => {
   it("fetches calendar view events for the requested window", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          value: [
-            {
-              id: "evt-1",
-              changeKey: "ck-1",
-              subject: "Planning",
-              start: {
-                dateTime: "2026-05-22T10:00:00.0000000",
-                timeZone: "UTC",
-              },
-              end: {
-                dateTime: "2026-05-22T11:00:00.0000000",
-                timeZone: "UTC",
-              },
-            },
-          ],
-        }),
-        {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ mail: "owner@example.com" }), {
           status: 200,
           headers: {
             "Content-Type": "application/json",
           },
-        },
-      ),
-    );
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "evt-1",
+                changeKey: "ck-1",
+                subject: "Planning",
+                start: {
+                  dateTime: "2026-05-22T10:00:00.0000000",
+                  timeZone: "UTC",
+                },
+                end: {
+                  dateTime: "2026-05-22T11:00:00.0000000",
+                  timeZone: "UTC",
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
     const source = new GraphMeetingSource(
       {
         getAccessToken: async () => "token-123",
@@ -137,8 +150,8 @@ describe("GraphMeetingSource", () => {
       },
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const firstCall = fetchMock.mock.calls[0];
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstCall = fetchMock.mock.calls[1];
 
     expect(firstCall).toBeDefined();
     const [requestUrl, init] = firstCall as unknown as [URL, RequestInit];
@@ -155,6 +168,40 @@ describe("GraphMeetingSource", () => {
     expect(meetings).toHaveLength(1);
     expect(meetings[0]?.title).toBe("Planning");
     expect(meetings[0]?.start).toBe("2026-05-22T10:00:00.000Z");
+  });
+
+  it("marks the calendar owner as optional when their attendee entry is optional", () => {
+    const meeting = normalizeGraphEvent(
+      {
+        id: "evt-opt",
+        changeKey: "ck-opt",
+        subject: "Optional invite",
+        isOrganizer: false,
+        attendees: [
+          {
+            emailAddress: {
+              name: "Owner",
+              address: "owner@example.com",
+            },
+            type: "optional",
+          },
+        ],
+        start: {
+          dateTime: "2026-05-22T10:00:00.0000000",
+          timeZone: "UTC",
+        },
+        end: {
+          dateTime: "2026-05-22T11:00:00.0000000",
+          timeZone: "UTC",
+        },
+      },
+      CALENDAR,
+      {
+        currentUserEmail: "owner@example.com",
+      },
+    );
+
+    expect(meeting.isOptionalForOwner).toBe(true);
   });
 
   it("ignores series master events from calendar view results", async () => {
@@ -272,6 +319,14 @@ describe("GraphMeetingSource", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
+        new Response(JSON.stringify({ mail: "owner@example.com" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             value: [
@@ -342,8 +397,8 @@ describe("GraphMeetingSource", () => {
       },
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [firstRequestUrl, firstRequestInit] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const [firstRequestUrl, firstRequestInit] = fetchMock.mock.calls[1] as unknown as [URL, RequestInit];
     expect(String(firstRequestUrl)).toContain("/calendarView/delta");
     expect(String(firstRequestUrl)).not.toContain("%24orderby");
     expect(String(firstRequestUrl)).not.toContain("%24top");
@@ -406,6 +461,14 @@ describe("GraphMeetingSource", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
+        new Response(JSON.stringify({ mail: "owner@example.com" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             value: [
@@ -462,8 +525,8 @@ describe("GraphMeetingSource", () => {
       },
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [hydrationUrl] = fetchMock.mock.calls[1] as unknown as [URL, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const [hydrationUrl] = fetchMock.mock.calls[2] as unknown as [URL, RequestInit];
     expect(String(hydrationUrl)).toContain("/me/calendars/primary/events/evt-4");
     expect(result.meetings[0]?.changeKey).toBe("ck-4");
     expect(result.meetings[0]?.start).toBe("2026-05-22T14:00:00.000Z");
@@ -539,6 +602,14 @@ describe("GraphMeetingSource", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
+        new Response(JSON.stringify({ mail: "owner@example.com" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             error: {
@@ -600,7 +671,7 @@ describe("GraphMeetingSource", () => {
     await vi.advanceTimersByTimeAsync(1000);
     const meetings = await pending;
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(meetings[0]?.id).toBe("evt-5");
     vi.useRealTimers();
   });

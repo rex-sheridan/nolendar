@@ -6,6 +6,14 @@ export function shouldSyncMeeting(meeting: Meeting, filters: FiltersConfig): boo
     return false;
   }
 
+  if (filters.ignorePersonal && isPersonalMeeting(meeting)) {
+    return false;
+  }
+
+  if (filters.ignoreOptionalAttendance && meeting.isOptionalForOwner) {
+    return false;
+  }
+
   if (filters.requireAttendees && meeting.attendees.length === 0) {
     return false;
   }
@@ -22,4 +30,9 @@ function meetingDurationMinutes(meeting: Meeting): number {
   const end = new Date(meeting.end);
 
   return Math.max(0, (end.getTime() - start.getTime()) / (60 * 1000));
+}
+
+function isPersonalMeeting(meeting: Meeting): boolean {
+  const sensitivity = meeting.sensitivity?.toLowerCase();
+  return sensitivity === "personal" || sensitivity === "private";
 }

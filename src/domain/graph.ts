@@ -37,6 +37,8 @@ export interface GraphEvent {
   responseStatus?: {
     response?: string | null;
   } | null;
+  sensitivity?: string | null;
+  isOrganizer?: boolean | null;
   type?: string | null;
   isCancelled?: boolean | null;
   recurrence?: object | null;

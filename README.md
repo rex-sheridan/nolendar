@@ -40,7 +40,6 @@ Planned next:
 
 - Recurring meeting sync hardening
 - Template-based page creation
-- Remaining filter support for `ignorePersonal` and `ignoreOptionalAttendance`
 
 ## Planned Features
 
@@ -692,6 +691,8 @@ The current sync implementation:
   - `ignoreDeclined`
   - `minDurationMinutes`
   - `requireAttendees`
+  - `ignorePersonal`
+  - `ignoreOptionalAttendance`
 - looks up existing Notion pages by the configured Outlook event ID property
 - skips updates when the stored `changeKey` matches unless `--force-update` is used
 - updates existing pages when the `changeKey` differs
@@ -705,7 +706,6 @@ Not implemented yet:
 
 - recurring meeting edge-case hardening
 - template-page cloning
-- filters for `ignorePersonal` and `ignoreOptionalAttendance`
 - MCP-based Notion integration
 
 ## Idempotency

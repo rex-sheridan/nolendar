@@ -54,6 +54,51 @@ describe("shouldSyncMeeting", () => {
     ).toBe(false);
   });
 
+  it("filters personal meetings when configured", () => {
+    expect(
+      shouldSyncMeeting(
+        {
+          ...BASE_MEETING,
+          sensitivity: "personal",
+        },
+        {
+          ...BASE_FILTERS,
+          ignorePersonal: true,
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("filters private meetings when configured", () => {
+    expect(
+      shouldSyncMeeting(
+        {
+          ...BASE_MEETING,
+          sensitivity: "private",
+        },
+        {
+          ...BASE_FILTERS,
+          ignorePersonal: true,
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("filters meetings where the calendar owner is optional", () => {
+    expect(
+      shouldSyncMeeting(
+        {
+          ...BASE_MEETING,
+          isOptionalForOwner: true,
+        },
+        {
+          ...BASE_FILTERS,
+          ignoreOptionalAttendance: true,
+        },
+      ),
+    ).toBe(false);
+  });
+
   it("keeps eligible meetings", () => {
     expect(
       shouldSyncMeeting(

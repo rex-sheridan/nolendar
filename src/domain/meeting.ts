@@ -19,6 +19,9 @@ export interface Meeting {
   agenda?: string;
   details?: string;
   responseStatus?: string;
+  sensitivity?: string;
+  isOrganizer?: boolean;
+  isOptionalForOwner?: boolean;
   isCancelled: boolean;
   isRecurring: boolean;
 }
