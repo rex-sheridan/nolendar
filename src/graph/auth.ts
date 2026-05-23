@@ -4,21 +4,35 @@ export const DEFAULT_GRAPH_SCOPES = ["Calendars.Read", "User.Read"];
 
 export interface GraphAuthBaseConfig {
   tenantId: string;
-  clientId: string;
   scopes: string[];
+  clientId?: string;
 }
 
 export interface GraphDeviceCodeAuthConfig extends GraphAuthBaseConfig {
   mode: "device_code";
 }
 
+export interface GraphInteractiveBrowserAuthConfig extends GraphAuthBaseConfig {
+  mode: "interactive_browser";
+}
+
 export interface GraphAuthorizationCodeAuthConfig extends GraphAuthBaseConfig {
   mode: "auth_code";
+  clientId: string;
   clientSecret: string;
   redirectUri: string;
 }
 
-export type GraphAuthConfig = GraphDeviceCodeAuthConfig | GraphAuthorizationCodeAuthConfig;
+export interface GraphStaticAccessTokenAuthConfig extends GraphAuthBaseConfig {
+  mode: "static_access_token";
+  accessToken: string;
+}
+
+export type GraphAuthConfig =
+  | GraphDeviceCodeAuthConfig
+  | GraphInteractiveBrowserAuthConfig
+  | GraphAuthorizationCodeAuthConfig
+  | GraphStaticAccessTokenAuthConfig;
 
 export class GraphAuthError extends Error {
   constructor(message: string) {
@@ -28,15 +42,25 @@ export class GraphAuthError extends Error {
 }
 
 export function resolveGraphAuthConfig(config: NolendarConfig, env: NodeJS.ProcessEnv = process.env): GraphAuthConfig {
-  const clientId = env.MICROSOFT_CLIENT_ID;
+  const accessToken = env.MICROSOFT_ACCESS_TOKEN?.trim();
 
-  if (!clientId) {
-    throw new GraphAuthError(
-      `Missing \`MICROSOFT_CLIENT_ID\` for Microsoft Graph ${formatMode(config.microsoft.authMode)} authentication.`,
-    );
+  if (accessToken) {
+    return {
+      mode: "static_access_token",
+      tenantId: config.microsoft.tenant,
+      clientId: undefined,
+      scopes: parseScopes(env.MICROSOFT_GRAPH_SCOPES),
+      accessToken,
+    };
   }
 
+  const clientId = env.MICROSOFT_CLIENT_ID;
+
   if (config.microsoft.authMode === "auth_code") {
+    if (!clientId) {
+      throw new GraphAuthError("Missing `MICROSOFT_CLIENT_ID` for Microsoft Graph authorization-code authentication.");
+    }
+
     const clientSecret = env.MICROSOFT_CLIENT_SECRET;
 
     if (!clientSecret) {
@@ -54,7 +78,7 @@ export function resolveGraphAuthConfig(config: NolendarConfig, env: NodeJS.Proce
   }
 
   return {
-    mode: "device_code",
+    mode: config.microsoft.authMode,
     tenantId: config.microsoft.tenant,
     clientId,
     scopes: parseScopes(env.MICROSOFT_GRAPH_SCOPES),
@@ -76,8 +100,4 @@ function parseScopes(rawScopes?: string): string[] {
   }
 
   return scopes;
-}
-
-function formatMode(mode: NolendarConfig["microsoft"]["authMode"]): string {
-  return mode === "auth_code" ? "authorization-code" : "device-code";
 }

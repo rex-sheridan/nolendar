@@ -98,6 +98,25 @@ describe("normalizeConfig", () => {
     expect(config.microsoft.authMode).toBe("auth_code");
   });
 
+  it("accepts the interactive browser auth mode", () => {
+    const config = normalizeConfig({
+      microsoft: {
+        tenant: "organizations",
+        authMode: "interactive_browser",
+      },
+      notion: {
+        databaseId: "db_123",
+      },
+      calendars: [
+        {
+          id: "team",
+        },
+      ],
+    });
+
+    expect(config.microsoft.authMode).toBe("interactive_browser");
+  });
+
   it("rejects an invalid microsoft auth mode", () => {
     expect(() =>
       normalizeConfig({
@@ -113,6 +132,6 @@ describe("normalizeConfig", () => {
           },
         ],
       }),
-    ).toThrowError(new ConfigError("`microsoft.authMode` must be one of: device_code, auth_code."));
+    ).toThrowError(new ConfigError("`microsoft.authMode` must be one of: device_code, interactive_browser, auth_code."));
   });
 });

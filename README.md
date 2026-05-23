@@ -12,6 +12,7 @@ Implemented now:
 - CLI commands for config validation, Notion validation, meeting listing, and sync
 - Microsoft Graph authentication via:
   - device code flow
+  - interactive browser flow using Azure Identity's development application
   - authorization code flow for web-style app registrations
 - Notion API integration
 - Multi-calendar meeting listing
@@ -135,6 +136,7 @@ sync:
 - `microsoft.tenant` supports `common`, `organizations`, or `consumers`
 - `microsoft.authMode` supports:
   - `device_code`
+  - `interactive_browser`
   - `auth_code`
 - `notion.databaseId` is required
 - with the current Notion API model, this value should be the target data source ID used for row queries and page creation
@@ -200,7 +202,7 @@ If `MICROSOFT_GRAPH_SCOPES` is not set, Nolendar uses:
 
 To run a live end-to-end sync, you need:
 
-- `MICROSOFT_CLIENT_ID`
+- optionally `MICROSOFT_CLIENT_ID`
 - optionally `MICROSOFT_CLIENT_SECRET` and `MICROSOFT_REDIRECT_URI` for `auth_code`
 - `NOTION_TOKEN` or `NOTION_API_KEY`
 - one or more Outlook calendar IDs
@@ -288,6 +290,35 @@ Notes:
 - `MICROSOFT_REDIRECT_URI` must exactly match a redirect URI registered on the app
 - the current implementation requires a localhost HTTP redirect URI for the CLI callback listener
 - Nolendar will open a browser for sign-in and wait for the redirect back to the local callback URL
+
+#### Option 3: `interactive_browser`
+
+Use this when you cannot modify the app registration and need a local developer fallback. This mode uses Azure Identity's development application instead of your own Microsoft Entra app registration.
+
+Microsoft config:
+
+```yaml
+microsoft:
+  tenant: common
+  authMode: interactive_browser
+```
+
+Environment:
+
+```bash
+unset MICROSOFT_CLIENT_ID
+export MICROSOFT_GRAPH_SCOPES=Calendars.Read,User.Read
+```
+
+Notes:
+
+- this mode is intended as a developer fallback, not a production setup
+- Nolendar will open a browser for sign-in
+- because it does not rely on your app registration, it avoids both:
+  - `Allow public client flows`
+  - client secret creation
+
+You can also use `device_code` without `MICROSOFT_CLIENT_ID` to fall back to Azure Identity's development application, but `interactive_browser` is the better choice when device-code flow is blocked by app-registration policy.
 
 ### Notion Integration Token
 

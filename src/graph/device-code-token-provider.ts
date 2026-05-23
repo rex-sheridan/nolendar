@@ -1,6 +1,6 @@
 import { DeviceCodeCredential } from "@azure/identity";
 
-import type { GraphAuthConfig } from "./auth.js";
+import type { GraphDeviceCodeAuthConfig } from "./auth.js";
 
 export interface AccessTokenProvider {
   getAccessToken(): Promise<string>;
@@ -20,7 +20,7 @@ export class DeviceCodeTokenProvider implements AccessTokenProvider {
   private readonly credential: DeviceCodeCredential;
   private readonly scopes: string[];
 
-  constructor(config: GraphAuthConfig, promptTarget: DeviceCodePromptTarget) {
+  constructor(config: GraphDeviceCodeAuthConfig, promptTarget: DeviceCodePromptTarget) {
     this.credential = new DeviceCodeCredential({
       tenantId: config.tenantId,
       clientId: config.clientId,
@@ -76,6 +76,7 @@ function formatDeviceCodeError(error: unknown): Error {
         "- `microsoft.tenant` does not match the type of account you used to sign in",
         "- the device-code sign-in was not completed successfully",
         "- your tenant blocked the flow with Conditional Access",
+        "- if you cannot change app registration settings, try `microsoft.authMode: interactive_browser` and omit `MICROSOFT_CLIENT_ID`",
       ].join("\n"),
     );
   }

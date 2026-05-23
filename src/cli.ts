@@ -6,6 +6,8 @@ import { resolveGraphAuthConfig } from "./graph/auth.js";
 import { AuthorizationCodeTokenProvider } from "./graph/authorization-code-token-provider.js";
 import { DeviceCodeTokenProvider } from "./graph/device-code-token-provider.js";
 import { GraphMeetingSource } from "./graph/graph-meeting-source.js";
+import { InteractiveBrowserTokenProvider } from "./graph/interactive-browser-token-provider.js";
+import { StaticAccessTokenProvider } from "./graph/static-access-token-provider.js";
 import type { LookaheadWindow } from "./domain/config.js";
 import { listMeetings } from "./list.js";
 import { formatMeeting } from "./meeting-format.js";
@@ -163,6 +165,14 @@ function buildGraphMeetingSource(config: NolendarConfig, deps: CliDependencies):
 
   if (authConfig.mode === "auth_code") {
     return new GraphMeetingSource(new AuthorizationCodeTokenProvider(authConfig, deps.stdout));
+  }
+
+  if (authConfig.mode === "interactive_browser") {
+    return new GraphMeetingSource(new InteractiveBrowserTokenProvider(authConfig));
+  }
+
+  if (authConfig.mode === "static_access_token") {
+    return new GraphMeetingSource(new StaticAccessTokenProvider(authConfig.accessToken));
   }
 
   return new GraphMeetingSource(new DeviceCodeTokenProvider(authConfig, deps.stdout));

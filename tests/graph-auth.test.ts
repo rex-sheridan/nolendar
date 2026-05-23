@@ -35,10 +35,13 @@ const CONFIG: NolendarConfig = {
 };
 
 describe("resolveGraphAuthConfig", () => {
-  it("requires a client id", () => {
-    expect(() => resolveGraphAuthConfig(CONFIG, {})).toThrowError(
-      new GraphAuthError("Missing `MICROSOFT_CLIENT_ID` for Microsoft Graph device-code authentication."),
-    );
+  it("allows device code mode without a client id by falling back to the Azure development application", () => {
+    expect(resolveGraphAuthConfig(CONFIG, {})).toEqual({
+      mode: "device_code",
+      tenantId: "organizations",
+      clientId: undefined,
+      scopes: DEFAULT_GRAPH_SCOPES,
+    });
   });
 
   it("uses default scopes when none are provided", () => {
@@ -65,6 +68,24 @@ describe("resolveGraphAuthConfig", () => {
   });
 
   it("requires a client secret for auth code mode", () => {
+    expect(() =>
+      resolveGraphAuthConfig(
+        {
+          ...CONFIG,
+          microsoft: {
+            tenant: "organizations",
+            authMode: "auth_code",
+          },
+        },
+        {
+        },
+      ),
+    ).toThrowError(
+      new GraphAuthError("Missing `MICROSOFT_CLIENT_ID` for Microsoft Graph authorization-code authentication."),
+    );
+  });
+
+  it("requires a client secret once auth code has a client id", () => {
     expect(() =>
       resolveGraphAuthConfig(
         {
@@ -106,6 +127,40 @@ describe("resolveGraphAuthConfig", () => {
       clientSecret: "client-secret",
       redirectUri: "http://localhost:8787/auth/callback",
       scopes: DEFAULT_GRAPH_SCOPES,
+    });
+  });
+
+  it("allows interactive browser mode without a client id", () => {
+    expect(
+      resolveGraphAuthConfig(
+        {
+          ...CONFIG,
+          microsoft: {
+            tenant: "organizations",
+            authMode: "interactive_browser",
+          },
+        },
+        {},
+      ),
+    ).toEqual({
+      mode: "interactive_browser",
+      tenantId: "organizations",
+      clientId: undefined,
+      scopes: DEFAULT_GRAPH_SCOPES,
+    });
+  });
+
+  it("prefers a raw access token when provided", () => {
+    expect(
+      resolveGraphAuthConfig(CONFIG, {
+        MICROSOFT_ACCESS_TOKEN: "bearer-token",
+      }),
+    ).toEqual({
+      mode: "static_access_token",
+      tenantId: "organizations",
+      clientId: undefined,
+      scopes: DEFAULT_GRAPH_SCOPES,
+      accessToken: "bearer-token",
     });
   });
 });

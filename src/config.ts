@@ -81,11 +81,11 @@ function normalizeMicrosoftAuthMode(value: unknown): MicrosoftAuthMode {
     return "device_code";
   }
 
-  if (authMode === "device_code" || authMode === "auth_code") {
+  if (authMode === "device_code" || authMode === "interactive_browser" || authMode === "auth_code") {
     return authMode;
   }
 
-  throw new ConfigError("`microsoft.authMode` must be one of: device_code, auth_code.");
+  throw new ConfigError("`microsoft.authMode` must be one of: device_code, interactive_browser, auth_code.");
 }
 
 function normalizeNotion(value: unknown): NotionConfig {
