@@ -1,7 +1,12 @@
 import { Command } from "commander";
 
 import { loadConfig } from "./config.js";
+import { resolveGraphAuthConfig } from "./graph/auth.js";
+import { DeviceCodeTokenProvider } from "./graph/device-code-token-provider.js";
+import { GraphMeetingSource } from "./graph/graph-meeting-source.js";
 import type { LookaheadWindow } from "./domain/config.js";
+import { listMeetings } from "./list.js";
+import { formatMeeting } from "./meeting-format.js";
 
 export interface CliDependencies {
   stdout: Pick<Console, "log">;
@@ -21,12 +26,24 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .action(async (options: { config: string; lookahead?: string }) => {
       const config = await loadConfig(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
+      const authConfig = resolveGraphAuthConfig(config);
+      const meetingSource = new GraphMeetingSource(new DeviceCodeTokenProvider(authConfig, deps.stdout));
+      const result = await listMeetings(config, lookahead, { meetingSource });
 
-      deps.stdout.log(`Meetings for ${lookahead} from ${config.calendars.length} configured calendar(s):`);
-      for (const calendar of config.calendars) {
-        deps.stdout.log(`- ${calendar.name ?? calendar.id}`);
+      deps.stdout.log(
+        `Meetings for ${result.lookahead} from ${config.calendars.length} configured calendar(s) between ${result.window.start} and ${result.window.end}:`,
+      );
+
+      if (result.meetings.length === 0) {
+        deps.stdout.log("No meetings found.");
+        return;
       }
-      deps.stdout.log("Graph meeting retrieval is not implemented yet.");
+
+      for (const meeting of result.meetings) {
+        for (const line of formatMeeting(meeting)) {
+          deps.stdout.log(line);
+        }
+      }
     });
 
   program

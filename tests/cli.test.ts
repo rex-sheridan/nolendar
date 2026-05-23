@@ -30,7 +30,7 @@ describe("cli", () => {
     expect(stderr.error).toHaveBeenCalledWith("`--lookahead` must be one of: today, 24h, 7d.");
   });
 
-  it("prints configured calendars for the list command", async () => {
+  it("reports a missing Microsoft client id for the list command", async () => {
     const stdout = { log: vi.fn() };
     const stderr = { error: vi.fn() };
 
@@ -39,9 +39,9 @@ describe("cli", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(0);
-    expect(stdout.log).toHaveBeenCalledWith("Meetings for today from 2 configured calendar(s):");
-    expect(stdout.log).toHaveBeenCalledWith("- Primary");
-    expect(stdout.log).toHaveBeenCalledWith("- Team");
+    expect(exitCode).toBe(1);
+    expect(stderr.error).toHaveBeenCalledWith(
+      "Missing `MICROSOFT_CLIENT_ID` for Microsoft Graph device-code authentication.",
+    );
   });
 });
