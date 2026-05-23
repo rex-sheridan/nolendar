@@ -166,6 +166,121 @@ describe("ApiNotionClient page icon writes", () => {
     );
   });
 
+  it("labels template readiness polling distinctly in timing output", async () => {
+    const timingReporter = {
+      record: vi.fn(),
+    };
+    const client = new ApiNotionClient(
+      "token",
+      {
+        blocks: {
+          children: {
+            append: vi.fn(async () => undefined),
+            list: vi
+              .fn()
+              .mockResolvedValueOnce({
+                results: [],
+                has_more: false,
+                next_cursor: null,
+              })
+              .mockResolvedValueOnce({
+                results: [
+                  {
+                    id: "template-block-1",
+                    object: "block",
+                    type: "paragraph",
+                    paragraph: {
+                      rich_text: [],
+                    },
+                  },
+                ],
+                has_more: false,
+                next_cursor: null,
+              }),
+          },
+        },
+        dataSources: {
+          retrieve: vi.fn(),
+          update: vi.fn(),
+          query: vi.fn(),
+        },
+        pages: {
+          create: vi.fn(async () => ({ id: "page-1" })),
+          update: vi.fn(async () => undefined),
+        },
+        users: {
+          me: vi.fn(),
+          list: vi.fn(),
+        },
+      },
+      timingReporter,
+    );
+
+    await client.createMeetingPage({
+      config: {
+        microsoft: { tenant: "common", authMode: "device_code" },
+        notion: {
+          databaseId: "data-source-id",
+          dataSourceTemplate: {
+            type: "default",
+          },
+        },
+        calendars: [],
+        filters: {
+          ignoreDeclined: true,
+          requireAttendees: false,
+          ignorePersonal: false,
+          ignoreOptionalAttendance: false,
+        },
+        mapping: {
+          title: "Name",
+          due: "Due",
+          eventId: "Outlook Event ID",
+          changeKey: "Outlook ChangeKey",
+        },
+        sync: {
+          lookahead: "today",
+          statePath: "/tmp/.nolendar/state.json",
+        },
+      },
+      dataSource: {
+        id: "data-source-id",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+        },
+      },
+      meeting: {
+        id: "evt-1",
+        changeKey: "ck-1",
+        calendarId: "primary",
+        title: "Planning",
+        start: "2026-05-22T13:00:00.000Z",
+        end: "2026-05-22T14:00:00.000Z",
+        attendees: [],
+        isCancelled: false,
+        isRecurring: false,
+      },
+    });
+
+    expect(timingReporter.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: "notion",
+        operation: "blocks.children.list",
+        detail: "block_id=page-1 purpose=template_ready_poll poll=1 start_cursor=- page_size=100",
+      }),
+    );
+    expect(timingReporter.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: "notion",
+        operation: "blocks.children.list",
+        detail: "block_id=page-1 purpose=template_ready_poll poll=2 start_cursor=- page_size=100",
+      }),
+    );
+  });
+
   it("sends an emoji page icon when configured", async () => {
     const pages = {
       create: vi.fn(async () => ({ id: "page-1" })),

@@ -112,7 +112,9 @@ export class ApiNotionClient implements NotionClient {
       return this.templateBlockCache.get(templatePageId) ?? [];
     }
 
-    const blocks = await this.listBlockChildren(templatePageId);
+    const blocks = await this.listBlockChildren(templatePageId, {
+      purpose: "template_copy",
+    });
     const sanitizedBlocks = await Promise.all(blocks.map((block) => this.sanitizeBlockForCreate(block)));
     this.templateBlockCache.set(templatePageId, sanitizedBlocks);
     return sanitizedBlocks;
@@ -404,14 +406,20 @@ export class ApiNotionClient implements NotionClient {
     return response.id ?? "";
   }
 
-  private async listBlockChildren(blockId: string): Promise<Array<Record<string, unknown>>> {
+  private async listBlockChildren(
+    blockId: string,
+    options: {
+      purpose?: "template_copy" | "template_ready_poll" | "nested_block_copy";
+      poll?: number;
+    } = {},
+  ): Promise<Array<Record<string, unknown>>> {
     const blocks: Array<Record<string, unknown>> = [];
     let nextCursor: string | undefined;
 
     do {
       const response = (await this.timed(
         "blocks.children.list",
-        `block_id=${blockId} start_cursor=${nextCursor ?? "-"} page_size=100`,
+        describeBlockChildrenList(blockId, nextCursor, options),
         () =>
         this.client.blocks.children.list({
           block_id: blockId,
@@ -473,13 +481,18 @@ export class ApiNotionClient implements NotionClient {
   }
 
   private async listAndSanitizeNestedChildren(blockId: string): Promise<unknown[]> {
-    const childBlocks = await this.listBlockChildren(blockId);
+    const childBlocks = await this.listBlockChildren(blockId, {
+      purpose: "nested_block_copy",
+    });
     return Promise.all(childBlocks.map((child) => this.sanitizeBlockForCreate(child)));
   }
 
   private async waitForTemplateReady(pageId: string): Promise<void> {
     for (let attempt = 0; attempt < TEMPLATE_READY_MAX_POLLS; attempt += 1) {
-      const children = await this.listBlockChildren(pageId);
+      const children = await this.listBlockChildren(pageId, {
+        purpose: "template_ready_poll",
+        poll: attempt + 1,
+      });
 
       if (children.length > 0) {
         return;
@@ -526,6 +539,30 @@ function describeCreateMeetingPage(
   }
 
   return `parent_data_source_id=${dataSourceId} template_blocks=${templateBlockCount} children=${templateBlockCount + meetingChildCount}`;
+}
+
+function describeBlockChildrenList(
+  blockId: string,
+  nextCursor: string | undefined,
+  options: {
+    purpose?: "template_copy" | "template_ready_poll" | "nested_block_copy";
+    poll?: number;
+  },
+): string {
+  const parts = [`block_id=${blockId}`];
+
+  if (options.purpose) {
+    parts.push(`purpose=${options.purpose}`);
+  }
+
+  if (options.poll !== undefined) {
+    parts.push(`poll=${options.poll}`);
+  }
+
+  parts.push(`start_cursor=${nextCursor ?? "-"}`);
+  parts.push("page_size=100");
+
+  return parts.join(" ");
 }
 
 function truncateForTiming(value: string, maxLength = 40): string {
