@@ -37,7 +37,7 @@ npm install
 npm run dev -- init
 ```
 
-3. Follow [AUTHENTICATION.md](/Users/rex/workspace/nolendar/AUTHENTICATION.md) to set up:
+3. Follow [AUTHENTICATION.md](AUTHENTICATION.md) to set up:
    - Microsoft authentication
    - your Notion token
    - Outlook calendar IDs
