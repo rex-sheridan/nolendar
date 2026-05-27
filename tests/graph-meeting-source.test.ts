@@ -97,6 +97,91 @@ describe("normalizeGraphEvent", () => {
 });
 
 describe("GraphMeetingSource", () => {
+  it("lists available calendars and sorts the default calendar first", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "team-id",
+                name: "Team",
+                isDefaultCalendar: false,
+                owner: {
+                  name: "Owner",
+                  address: "owner@example.com",
+                },
+              },
+            ],
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/calendars?$skiptoken=page-2",
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "primary-id",
+                name: "Calendar",
+                isDefaultCalendar: true,
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
+    const source = new GraphMeetingSource(
+      {
+        getAccessToken: async () => "token-123",
+      },
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const calendars = await source.listCalendars();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [requestUrl, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(String(requestUrl)).toContain("/me/calendars");
+    expect(String(requestUrl)).toContain("%24select=id%2Cname%2CisDefaultCalendar%2Cowner");
+    expect(String(requestUrl)).toContain("%24top=100");
+    expect(init).toEqual({
+      headers: {
+        Authorization: "Bearer token-123",
+        Accept: "application/json",
+        Prefer: 'outlook.timezone="UTC"',
+      },
+    });
+    expect(calendars).toEqual([
+      {
+        id: "primary-id",
+        name: "Calendar",
+        isDefaultCalendar: true,
+        ownerName: undefined,
+        ownerAddress: undefined,
+      },
+      {
+        id: "team-id",
+        name: "Team",
+        isDefaultCalendar: false,
+        ownerName: "Owner",
+        ownerAddress: "owner@example.com",
+      },
+    ]);
+  });
+
   it("fetches calendar view events for the requested window", async () => {
     const fetchMock = vi
       .fn()

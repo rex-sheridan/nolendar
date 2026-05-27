@@ -1,4 +1,4 @@
-import type { NolendarConfig } from "../domain/config.js";
+import type { MicrosoftConfig } from "../domain/config.js";
 
 export const DEFAULT_GRAPH_SCOPES = ["Calendars.Read", "User.Read"];
 
@@ -41,7 +41,10 @@ export class GraphAuthError extends Error {
   }
 }
 
-export function resolveGraphAuthConfig(config: NolendarConfig, env: NodeJS.ProcessEnv = process.env): GraphAuthConfig {
+export function resolveGraphAuthConfig(
+  config: { microsoft: MicrosoftConfig },
+  env: NodeJS.ProcessEnv = process.env,
+): GraphAuthConfig {
   const accessToken = env.MICROSOFT_ACCESS_TOKEN?.trim();
 
   if (accessToken) {
@@ -75,6 +78,12 @@ export function resolveGraphAuthConfig(config: NolendarConfig, env: NodeJS.Proce
       redirectUri: env.MICROSOFT_REDIRECT_URI ?? "http://localhost:8787/auth/callback",
       scopes: parseScopes(env.MICROSOFT_GRAPH_SCOPES),
     };
+  }
+
+  if (!clientId) {
+    throw new GraphAuthError(
+      `Missing \`MICROSOFT_CLIENT_ID\` for Microsoft Graph ${config.microsoft.authMode} authentication.`,
+    );
   }
 
   return {

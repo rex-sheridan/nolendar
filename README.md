@@ -7,6 +7,7 @@ Nolendar reads upcoming meetings from Outlook Calendar via Microsoft Graph and t
 Implemented now:
 
 - Outlook meeting listing from one or more Microsoft calendars
+- Outlook calendar discovery with copyable calendar IDs
 - Notion page creation and update with idempotency based on Outlook event ID and `changeKey`
 - Incremental sync using Microsoft Graph `calendarView/delta`
 - Deleted-event archiving and recurring-meeting handling
@@ -20,7 +21,6 @@ Implemented now:
 Remaining work is mostly polish:
 
 - auth/runtime cleanup
-- helper commands like calendar discovery
 - optional MCP-based Notion integration
 
 ## Quickstart
@@ -40,8 +40,13 @@ npm run dev -- init
 3. Follow [AUTHENTICATION.md](AUTHENTICATION.md) to set up:
    - Microsoft authentication
    - your Notion token
-   - Outlook calendar IDs
    - the target Notion data source ID
+
+   To discover Outlook calendar IDs after setting `MICROSOFT_CLIENT_ID`:
+
+```bash
+npm run dev -- list-calendars
+```
 
 4. Validate config:
 
@@ -142,6 +147,8 @@ sync:
 
 - `microsoft.tenant` supports `common`, `organizations`, or `consumers`
 - `microsoft.authMode` supports `device_code`, `interactive_browser`, and `auth_code`
+- use `npm run dev -- list-calendars` to print available Outlook calendar IDs before choosing `calendars[].id`
+- Microsoft Graph auth requires either `MICROSOFT_CLIENT_ID` for delegated public-client auth or `MICROSOFT_ACCESS_TOKEN` for a raw-token override
 - `calendars` must contain at least one calendar
 - `sync.lookahead` defaults to `today`
 - `sync.lookahead` also accepts relative ranges like `12h`, `5d`, `2w`, and `3m`
@@ -275,6 +282,26 @@ npm run dev -- validate-config --config nolendar.yml
 ```
 
 ### Inspection
+
+List available Outlook calendars:
+
+```bash
+export MICROSOFT_CLIENT_ID=your_microsoft_app_client_id
+npm run dev -- list-calendars
+```
+
+Use Microsoft auth settings from a config file:
+
+```bash
+npm run dev -- list-calendars --config nolendar.yml
+```
+
+Override Microsoft auth settings without a config file:
+
+```bash
+export MICROSOFT_CLIENT_ID=your_microsoft_app_client_id
+npm run dev -- list-calendars --tenant organizations --auth-mode interactive_browser
+```
 
 List meetings:
 
@@ -411,7 +438,6 @@ Not implemented yet:
 
 - MCP-based Notion integration
 - additional auth/token-cache hardening
-- helper commands like calendar discovery
 
 ## Example Output
 

@@ -2,11 +2,11 @@ import { Command } from "commander";
 
 import { createConsoleTimingReporter, type ApiTimingReporter } from "./api-timing.js";
 import { loadConfig } from "./config.js";
-import type { NolendarConfig } from "./domain/config.js";
+import type { MicrosoftAuthMode, MicrosoftConfig, NolendarConfig } from "./domain/config.js";
 import { resolveGraphAuthConfig } from "./graph/auth.js";
 import { AuthorizationCodeTokenProvider } from "./graph/authorization-code-token-provider.js";
 import { DeviceCodeTokenProvider } from "./graph/device-code-token-provider.js";
-import { GraphMeetingSource } from "./graph/graph-meeting-source.js";
+import { GraphMeetingSource, type AvailableCalendar } from "./graph/graph-meeting-source.js";
 import { InteractiveBrowserTokenProvider } from "./graph/interactive-browser-token-provider.js";
 import { StaticAccessTokenProvider } from "./graph/static-access-token-provider.js";
 import type { LookaheadWindow } from "./domain/config.js";
@@ -35,6 +35,30 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   const buildNotionClientFn = deps.buildNotionClient ?? ((options?: { timingReporter?: ApiTimingReporter }) => buildNotionClient(deps, options));
 
   program.name("nolendar").description("Sync Outlook meetings into Notion.");
+
+  program
+    .command("list-calendars")
+    .description("Print available Outlook calendars and their IDs.")
+    .option("-c, --config <path>", "Path to YAML config file for Microsoft auth settings")
+    .option("--tenant <tenant>", "Microsoft tenant: common, organizations, or consumers")
+    .option("--auth-mode <mode>", "Microsoft auth mode: device_code, interactive_browser, or auth_code")
+    .option("--timings", "Print API call timings", false)
+    .action(async (options: { config?: string; tenant?: string; authMode?: string; timings: boolean }) => {
+      const microsoft = await resolveMicrosoftConfig(options, loadConfigFn);
+      const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+      const graph = buildGraphMeetingSourceFromMicrosoftConfig(microsoft, deps, timingReporter);
+      const calendars = await graph.listCalendars();
+
+      if (calendars.length === 0) {
+        deps.stdout.log("No calendars found.");
+        return;
+      }
+
+      deps.stdout.log("Available calendars:");
+      for (const line of formatCalendarOutput(calendars)) {
+        deps.stdout.log(line);
+      }
+    });
 
   program
     .command("list")
@@ -300,6 +324,71 @@ function parseDelayMs(value: string): number {
   return parsed;
 }
 
+async function resolveMicrosoftConfig(
+  options: { config?: string; tenant?: string; authMode?: string },
+  loadConfigFn: typeof loadConfig,
+): Promise<MicrosoftConfig> {
+  const baseConfig = options.config ? (await loadConfigFn(options.config)).microsoft : defaultMicrosoftConfig();
+
+  return {
+    tenant: resolveMicrosoftTenant(options.tenant, baseConfig.tenant),
+    authMode: resolveMicrosoftAuthMode(options.authMode, baseConfig.authMode),
+  };
+}
+
+function defaultMicrosoftConfig(): MicrosoftConfig {
+  return {
+    tenant: "common",
+    authMode: "device_code",
+  };
+}
+
+function resolveMicrosoftTenant(value: string | undefined, fallback: MicrosoftConfig["tenant"]): MicrosoftConfig["tenant"] {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (value === "common" || value === "organizations" || value === "consumers") {
+    return value;
+  }
+
+  throw new Error("`--tenant` must be one of: common, organizations, consumers.");
+}
+
+function resolveMicrosoftAuthMode(value: string | undefined, fallback: MicrosoftAuthMode): MicrosoftAuthMode {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (value === "device_code" || value === "interactive_browser" || value === "auth_code") {
+    return value;
+  }
+
+  throw new Error("`--auth-mode` must be one of: device_code, interactive_browser, auth_code.");
+}
+
+function formatCalendarOutput(calendars: AvailableCalendar[]): string[] {
+  return calendars.flatMap((calendar) => {
+    const tags = calendar.isDefaultCalendar ? " [default]" : "";
+    const owner = formatCalendarOwner(calendar);
+    const lines = [`  - ${calendar.name}${tags}`, `    id: ${calendar.id}`];
+
+    if (owner) {
+      lines.push(`    owner: ${owner}`);
+    }
+
+    return lines;
+  });
+}
+
+function formatCalendarOwner(calendar: AvailableCalendar): string | undefined {
+  if (calendar.ownerName && calendar.ownerAddress) {
+    return `${calendar.ownerName} <${calendar.ownerAddress}>`;
+  }
+
+  return calendar.ownerName ?? calendar.ownerAddress;
+}
+
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -309,7 +398,15 @@ function buildGraphMeetingSource(
   deps: CliDependencies,
   timingReporter?: ApiTimingReporter,
 ): GraphMeetingSource {
-  const authConfig = resolveGraphAuthConfig(config);
+  return buildGraphMeetingSourceFromMicrosoftConfig(config.microsoft, deps, timingReporter);
+}
+
+function buildGraphMeetingSourceFromMicrosoftConfig(
+  microsoft: MicrosoftConfig,
+  deps: CliDependencies,
+  timingReporter?: ApiTimingReporter,
+): GraphMeetingSource {
+  const authConfig = resolveGraphAuthConfig({ microsoft });
 
   if (authConfig.mode === "auth_code") {
     return new GraphMeetingSource(new AuthorizationCodeTokenProvider(authConfig, deps.stdout), undefined, timingReporter);

@@ -1,5 +1,5 @@
 import type { CalendarConfig } from "../domain/config.js";
-import type { GraphEvent } from "../domain/graph.js";
+import type { GraphCalendar, GraphEvent } from "../domain/graph.js";
 import type { Meeting } from "../domain/meeting.js";
 import type { CalendarWindow, MeetingSource } from "../list.js";
 import type { ApiTimingReporter } from "../api-timing.js";
@@ -16,6 +16,27 @@ export class GraphMeetingSource implements MeetingSource {
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly timingReporter?: ApiTimingReporter,
   ) {}
+
+  async listCalendars(): Promise<AvailableCalendar[]> {
+    const accessToken = await this.accessTokenProvider.getAccessToken();
+    let nextUrl: URL | undefined = buildCalendarsUrl();
+    const calendars: AvailableCalendar[] = [];
+
+    while (nextUrl) {
+      const payload: GraphCollectionResponse<GraphCalendar> = await fetchGraphCollection<GraphCalendar>(
+        this.fetchImpl,
+        nextUrl,
+        accessToken,
+        {},
+        this.timingReporter,
+      );
+
+      calendars.push(...(payload.value ?? []).map(normalizeGraphCalendar));
+      nextUrl = payload["@odata.nextLink"] ? new URL(payload["@odata.nextLink"]) : undefined;
+    }
+
+    return calendars.sort(compareAvailableCalendars);
+  }
 
   async listMeetings(args: { calendar: CalendarConfig; window: CalendarWindow }): Promise<Meeting[]> {
     const accessToken = await this.accessTokenProvider.getAccessToken();
@@ -119,6 +140,13 @@ function buildCalendarViewUrl(calendarId: string, window: CalendarWindow): URL {
   return url;
 }
 
+function buildCalendarsUrl(): URL {
+  const url = new URL(`${GRAPH_BASE_URL}/me/calendars`);
+  url.searchParams.set("$select", "id,name,isDefaultCalendar,owner");
+  url.searchParams.set("$top", "100");
+  return url;
+}
+
 function buildCalendarViewDeltaUrl(calendarId: string, window: CalendarWindow): URL {
   const url = new URL(`${GRAPH_BASE_URL}/me/calendars/${encodeURIComponent(calendarId)}/calendarView/delta`);
   url.searchParams.set("startDateTime", window.start);
@@ -147,14 +175,26 @@ async function fetchGraphPayload(
     maxPageSize?: number;
   } = {},
   timingReporter?: ApiTimingReporter,
-): Promise<{ value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string }> {
-  return fetchGraphObject<{ value?: GraphEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string }>(
+): Promise<GraphCollectionResponse<GraphEvent>> {
+  return fetchGraphCollection<GraphEvent>(
     fetchImpl,
     url,
     accessToken,
     options,
     timingReporter,
   );
+}
+
+async function fetchGraphCollection<T>(
+  fetchImpl: typeof fetch,
+  url: URL,
+  accessToken: string,
+  options: {
+    maxPageSize?: number;
+  } = {},
+  timingReporter?: ApiTimingReporter,
+): Promise<GraphCollectionResponse<T>> {
+  return fetchGraphObject<GraphCollectionResponse<T>>(fetchImpl, url, accessToken, options, timingReporter);
 }
 
 async function fetchGraphObject<T>(
@@ -203,6 +243,43 @@ async function fetchGraphObject<T>(
   }
 
   throw new Error("Graph request failed after retries.");
+}
+
+export interface AvailableCalendar {
+  id: string;
+  name: string;
+  isDefaultCalendar: boolean;
+  ownerName?: string;
+  ownerAddress?: string;
+}
+
+interface GraphCollectionResponse<T> {
+  value?: T[];
+  "@odata.nextLink"?: string;
+  "@odata.deltaLink"?: string;
+}
+
+function normalizeGraphCalendar(calendar: GraphCalendar): AvailableCalendar {
+  const id = required(calendar.id, "Graph calendar is missing `id`.");
+  const name = calendar.name?.trim() || "(unnamed calendar)";
+  const ownerName = calendar.owner?.name?.trim() || undefined;
+  const ownerAddress = calendar.owner?.address?.trim() || undefined;
+
+  return {
+    id,
+    name,
+    isDefaultCalendar: Boolean(calendar.isDefaultCalendar),
+    ownerName,
+    ownerAddress,
+  };
+}
+
+function compareAvailableCalendars(left: AvailableCalendar, right: AvailableCalendar): number {
+  if (left.isDefaultCalendar !== right.isDefaultCalendar) {
+    return left.isDefaultCalendar ? -1 : 1;
+  }
+
+  return left.name.localeCompare(right.name);
 }
 
 function getRetryDelayMs(response: Response, attempt: number): number {

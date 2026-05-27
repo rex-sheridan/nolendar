@@ -76,7 +76,9 @@ function formatDeviceCodeError(error: unknown): Error {
         "- `microsoft.tenant` does not match the type of account you used to sign in",
         "- the device-code sign-in was not completed successfully",
         "- your tenant blocked the flow with Conditional Access",
-        "- if you cannot change app registration settings, try `microsoft.authMode: interactive_browser` and omit `MICROSOFT_CLIENT_ID`",
+        "- if your app registration is a web/confidential app, use `microsoft.authMode: auth_code` with `MICROSOFT_CLIENT_SECRET` instead",
+        "",
+        `Original error: ${message}`,
       ].join("\n"),
     );
   }

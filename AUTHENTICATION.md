@@ -17,7 +17,7 @@ Microsoft Graph auth may use:
 export MICROSOFT_CLIENT_ID=your_app_registration_client_id
 ```
 
-For `device_code` and `interactive_browser`, `MICROSOFT_CLIENT_ID` is optional. If omitted, Nolendar falls back to Azure Identity’s development application.
+For `device_code` and `interactive_browser`, `MICROSOFT_CLIENT_ID` is required. Use an app registration configured for public-client delegated auth.
 
 For `microsoft.authMode: auth_code`, you also need:
 
@@ -137,7 +137,7 @@ Notes:
 
 ### Option 3: `interactive_browser`
 
-Use this when you cannot modify the app registration and need a local developer fallback.
+Use this when your app registration is configured as a public client and you want browser-based sign-in.
 
 Config:
 
@@ -150,14 +150,13 @@ microsoft:
 Environment:
 
 ```bash
-unset MICROSOFT_CLIENT_ID
 export MICROSOFT_GRAPH_SCOPES=Calendars.Read,User.Read
+export MICROSOFT_CLIENT_ID=your_microsoft_app_client_id
 ```
 
 Notes:
 
-- this mode uses Azure Identity’s development application
-- it is a developer fallback, not a production setup
+- the app registration must be usable as a public client
 - Nolendar opens a browser for sign-in
 
 ### Option 4: `MICROSOFT_ACCESS_TOKEN` override
@@ -198,7 +197,30 @@ calendars:
     name: Primary
 ```
 
-If you want a non-primary calendar, you need its Graph calendar ID. Nolendar does not yet have a `list-calendars` command, so today that ID must come from Graph Explorer or another Graph client.
+If you want a non-primary calendar, list the calendars available to the signed-in Microsoft account:
+
+```bash
+npm run dev -- list-calendars
+```
+
+If you already have Microsoft auth settings in `nolendar.yml`, use them:
+
+```bash
+npm run dev -- list-calendars --config nolendar.yml
+```
+
+Example output:
+
+```text
+Available calendars:
+  - Calendar [default]
+    id: primary-calendar-id
+  - Team
+    id: team-calendar-id
+    owner: Owner <owner@example.com>
+```
+
+Copy the `id` value into `calendars[].id` in `nolendar.yml`.
 
 ## Notion Data Source ID
 

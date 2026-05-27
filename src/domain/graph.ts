@@ -11,6 +11,16 @@ export interface GraphDateTimeTimeZone {
   timeZone?: string | null;
 }
 
+export interface GraphCalendar {
+  id?: string | null;
+  name?: string | null;
+  isDefaultCalendar?: boolean | null;
+  owner?: {
+    name?: string | null;
+    address?: string | null;
+  } | null;
+}
+
 export interface GraphEvent {
   id?: string | null;
   changeKey?: string | null;

@@ -35,13 +35,10 @@ const CONFIG: NolendarConfig = {
 };
 
 describe("resolveGraphAuthConfig", () => {
-  it("allows device code mode without a client id by falling back to the Azure development application", () => {
-    expect(resolveGraphAuthConfig(CONFIG, {})).toEqual({
-      mode: "device_code",
-      tenantId: "organizations",
-      clientId: undefined,
-      scopes: DEFAULT_GRAPH_SCOPES,
-    });
+  it("requires a client id for device code mode", () => {
+    expect(() => resolveGraphAuthConfig(CONFIG, {})).toThrowError(
+      new GraphAuthError("Missing `MICROSOFT_CLIENT_ID` for Microsoft Graph device_code authentication."),
+    );
   });
 
   it("uses default scopes when none are provided", () => {
@@ -130,8 +127,8 @@ describe("resolveGraphAuthConfig", () => {
     });
   });
 
-  it("allows interactive browser mode without a client id", () => {
-    expect(
+  it("requires a client id for interactive browser mode", () => {
+    expect(() =>
       resolveGraphAuthConfig(
         {
           ...CONFIG,
@@ -142,12 +139,9 @@ describe("resolveGraphAuthConfig", () => {
         },
         {},
       ),
-    ).toEqual({
-      mode: "interactive_browser",
-      tenantId: "organizations",
-      clientId: undefined,
-      scopes: DEFAULT_GRAPH_SCOPES,
-    });
+    ).toThrowError(
+      new GraphAuthError("Missing `MICROSOFT_CLIENT_ID` for Microsoft Graph interactive_browser authentication."),
+    );
   });
 
   it("prefers a raw access token when provided", () => {

@@ -13,6 +13,7 @@ describe("cli", () => {
     const commandNames = cli.commands.map((command) => command.name());
 
     expect(commandNames).toEqual([
+      "list-calendars",
       "list",
       "validate-config",
       "validate-notion",
@@ -21,6 +22,34 @@ describe("cli", () => {
       "finalize-templates",
       "init",
     ]);
+  });
+
+  it("returns a non-zero exit code for invalid calendar discovery tenant values", async () => {
+    const stdout = { log: vi.fn() };
+    const stderr = { error: vi.fn() };
+
+    const exitCode = await runCli(["node", "nolendar", "list-calendars", "--tenant", "invalid"], {
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.error).toHaveBeenCalledWith("`--tenant` must be one of: common, organizations, consumers.");
+  });
+
+  it("returns a non-zero exit code for invalid calendar discovery auth modes", async () => {
+    const stdout = { log: vi.fn() };
+    const stderr = { error: vi.fn() };
+
+    const exitCode = await runCli(["node", "nolendar", "list-calendars", "--auth-mode", "password"], {
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.error).toHaveBeenCalledWith(
+      "`--auth-mode` must be one of: device_code, interactive_browser, auth_code.",
+    );
   });
 
   it("returns a non-zero exit code for invalid lookahead values", async () => {
