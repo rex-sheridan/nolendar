@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type Server } from "node:http";
 import { execFile } from "node:child_process";
 import os from "node:os";
 import { promisify } from "node:util";
@@ -9,29 +9,82 @@ import type { GraphAuthorizationCodeAuthConfig } from "./auth.js";
 import type { AccessTokenProvider } from "./device-code-token-provider.js";
 
 const execFileAsync = promisify(execFile);
+const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
 export interface AuthorizationCodePromptTarget {
   log(message: string): void;
 }
 
+interface AuthorizationCodeApp {
+  getAuthCodeUrl(args: {
+    scopes: string[];
+    redirectUri: string;
+    codeChallenge: string;
+    codeChallengeMethod: "S256";
+  }): Promise<string>;
+  acquireTokenByCode(args: {
+    code: string;
+    scopes: string[];
+    redirectUri: string;
+    codeVerifier?: string;
+  }): Promise<{
+    accessToken?: string;
+    expiresOn?: Date | null;
+  } | null>;
+}
+
+interface CachedToken {
+  accessToken: string;
+  expiresOnTimestamp: number;
+}
+
 export class AuthorizationCodeTokenProvider implements AccessTokenProvider {
-  private readonly app: ConfidentialClientApplication;
+  private readonly app: AuthorizationCodeApp;
+  private readonly authorize: typeof getAuthorizationCode;
+  private cachedToken?: CachedToken;
+  private tokenPromise?: Promise<CachedToken>;
 
   constructor(
     private readonly config: GraphAuthorizationCodeAuthConfig,
     private readonly promptTarget: AuthorizationCodePromptTarget,
+    options: {
+      app?: AuthorizationCodeApp;
+      authorize?: typeof getAuthorizationCode;
+      now?: () => number;
+    } = {},
   ) {
-    this.app = new ConfidentialClientApplication({
-      auth: {
-        clientId: config.clientId,
-        clientSecret: config.clientSecret,
-        authority: `https://login.microsoftonline.com/${config.tenantId}`,
-      },
-    });
+    this.app =
+      options.app ??
+      new ConfidentialClientApplication({
+        auth: {
+          clientId: config.clientId,
+          clientSecret: config.clientSecret,
+          authority: `https://login.microsoftonline.com/${config.tenantId}`,
+        },
+      });
+    this.authorize = options.authorize ?? getAuthorizationCode;
+    this.now = options.now ?? Date.now;
   }
 
+  private readonly now: () => number;
+
   async getAccessToken(): Promise<string> {
-    const { code, codeVerifier } = await getAuthorizationCode(this.app, this.config, this.promptTarget);
+    if (this.cachedToken && !isExpiringSoon(this.cachedToken, this.now())) {
+      return this.cachedToken.accessToken;
+    }
+
+    this.tokenPromise ??= this.acquireAccessToken();
+
+    try {
+      this.cachedToken = await this.tokenPromise;
+      return this.cachedToken.accessToken;
+    } finally {
+      this.tokenPromise = undefined;
+    }
+  }
+
+  private async acquireAccessToken(): Promise<CachedToken> {
+    const { code, codeVerifier } = await this.authorize(this.app, this.config, this.promptTarget);
     const token = await this.app.acquireTokenByCode({
       code,
       scopes: this.config.scopes,
@@ -43,12 +96,19 @@ export class AuthorizationCodeTokenProvider implements AccessTokenProvider {
       throw new Error("Microsoft Graph authorization-code authentication succeeded without returning an access token.");
     }
 
-    return token.accessToken;
+    return {
+      accessToken: token.accessToken,
+      expiresOnTimestamp: token.expiresOn?.getTime() ?? Number.MAX_SAFE_INTEGER,
+    };
   }
 }
 
+function isExpiringSoon(token: CachedToken, now: number): boolean {
+  return token.expiresOnTimestamp - now <= TOKEN_EXPIRY_BUFFER_MS;
+}
+
 async function getAuthorizationCode(
-  app: ConfidentialClientApplication,
+  app: AuthorizationCodeApp,
   config: GraphAuthorizationCodeAuthConfig,
   promptTarget: AuthorizationCodePromptTarget,
 ): Promise<{ code: string; codeVerifier?: string }> {
@@ -93,9 +153,13 @@ async function waitForAuthorizationCode(redirectUri: string): Promise<string> {
 
       if (error) {
         response.statusCode = 400;
-        response.end("Microsoft sign-in failed. You can close this tab.");
-        server.close();
-        reject(new Error(`Microsoft sign-in failed: ${error}${errorDescription ? ` (${errorDescription})` : ""}`));
+        response.end("Microsoft sign-in failed. You can close this tab.", () => {
+          closeCallbackServer(server)
+            .then(() => {
+              reject(new Error(`Microsoft sign-in failed: ${error}${errorDescription ? ` (${errorDescription})` : ""}`));
+            })
+            .catch(reject);
+        });
         return;
       }
 
@@ -107,9 +171,13 @@ async function waitForAuthorizationCode(redirectUri: string): Promise<string> {
 
       response.statusCode = 200;
       response.setHeader("Content-Type", "text/plain; charset=utf-8");
-      response.end("Microsoft sign-in completed. You can close this tab and return to nolendar.");
-      server.close();
-      resolve(code);
+      response.end("Microsoft sign-in completed. You can close this tab and return to nolendar.", () => {
+        closeCallbackServer(server)
+          .then(() => {
+            resolve(code);
+          })
+          .catch(reject);
+      });
     });
 
     server.once("error", (error) => {
@@ -117,6 +185,20 @@ async function waitForAuthorizationCode(redirectUri: string): Promise<string> {
     });
 
     server.listen(Number(url.port || "80"), url.hostname);
+  });
+}
+
+async function closeCallbackServer(server: Server): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+    server.closeIdleConnections();
   });
 }
 
