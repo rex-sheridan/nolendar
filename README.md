@@ -103,6 +103,7 @@ notion:
     databaseId: your_people_data_source_id
     nameProperty: Name
     emailProperty: Email Address
+    maxAttendeesPerMeeting: 10
   defaultTags:
     - meeting
   defaultAssigneeEmail: you@example.com
@@ -153,6 +154,7 @@ sync:
 - `sync.lookahead` defaults to `today`
 - `sync.lookahead` also accepts relative ranges like `12h`, `5d`, `2w`, and `3m`
 - `sync.statePath` defaults to `.nolendar/state.json`, resolved relative to the config file
+- `notion.peopleDataSource.maxAttendeesPerMeeting` defaults to `10`; set it lower to reduce Notion People lookups for large meetings, or `0` to skip participant relation association while still creating meeting pages
 
 ## Notion Setup
 
@@ -194,6 +196,8 @@ Nolendar can populate:
 - `mapping.assignee` from `notion.defaultAssigneeEmail` or the authenticated Notion identity
 - `mapping.participants` from Outlook attendees through `notion.peopleDataSource`
 - `notion.pageIcon` as a static icon on created or updated pages
+
+When participant syncing is enabled, Nolendar associates at most `notion.peopleDataSource.maxAttendeesPerMeeting` attendees per meeting with the configured relation. This limits expensive Notion People lookup/create calls for large meetings.
 
 By default, generated page content includes:
 

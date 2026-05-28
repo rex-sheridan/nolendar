@@ -65,8 +65,31 @@ describe("normalizeConfig", () => {
       databaseId: "people_123",
       nameProperty: "Name",
       emailProperty: "Email Address",
+      maxAttendeesPerMeeting: 10,
     });
     expect(config.mapping.participants).toBe("Participants");
+  });
+
+  it("accepts a configured participant attendee limit", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        peopleDataSource: {
+          databaseId: "people_123",
+          maxAttendeesPerMeeting: 3,
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+      mapping: {
+        participants: "Participants",
+      },
+    });
+
+    expect(config.notion.peopleDataSource?.maxAttendeesPerMeeting).toBe(3);
   });
 
   it("accepts a true data source template configuration", () => {
@@ -215,6 +238,30 @@ describe("normalizeConfig", () => {
       }),
     ).toThrowError(
       new ConfigError("`sync.lookahead` must be `today` or a relative range like `12h`, `5d`, `2w`, or `3m`."),
+    );
+  });
+
+  it("rejects invalid participant attendee limits", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+          peopleDataSource: {
+            databaseId: "people_123",
+            maxAttendeesPerMeeting: -1,
+          },
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+        mapping: {
+          participants: "Participants",
+        },
+      }),
+    ).toThrowError(
+      new ConfigError("`notion.peopleDataSource.maxAttendeesPerMeeting` must be a non-negative integer."),
     );
   });
 

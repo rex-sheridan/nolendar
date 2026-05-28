@@ -263,6 +263,18 @@ function optionalNumber(value: unknown, message: string): number | undefined {
   return value;
 }
 
+function optionalNonNegativeIntegerWithDefault(value: unknown, fallback: number, message: string): number {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new ConfigError(message);
+  }
+
+  return value;
+}
+
 function optionalStringArray(value: unknown, message: string): string[] | undefined {
   if (value === undefined) {
     return undefined;
@@ -319,6 +331,11 @@ function normalizePeopleDataSource(value: unknown): NotionConfig["peopleDataSour
       record.emailProperty,
       "Email Address",
       "`notion.peopleDataSource.emailProperty` must be a string.",
+    ),
+    maxAttendeesPerMeeting: optionalNonNegativeIntegerWithDefault(
+      record.maxAttendeesPerMeeting,
+      10,
+      "`notion.peopleDataSource.maxAttendeesPerMeeting` must be a non-negative integer.",
     ),
   };
 }

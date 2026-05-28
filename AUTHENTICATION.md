@@ -222,6 +222,19 @@ Available calendars:
 
 Copy the `id` value into `calendars[].id` in `nolendar.yml`.
 
+For large meetings, you can cap how many attendees are associated through the Notion People relation:
+
+```yaml
+notion:
+  peopleDataSource:
+    databaseId: your_people_data_source_id
+    nameProperty: Name
+    emailProperty: Email Address
+    maxAttendeesPerMeeting: 10
+```
+
+Set `maxAttendeesPerMeeting` to `0` to create meeting pages without participant relation association.
+
 ## Notion Data Source ID
 
 `notion.databaseId` should be the target Notion data source ID used for querying and page creation.

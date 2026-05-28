@@ -20,6 +20,7 @@ notion:
     databaseId: your_people_data_source_id
     nameProperty: Name
     emailProperty: Email Address
+    maxAttendeesPerMeeting: 10
   defaultTags:
     - meeting
   defaultAssigneeEmail: you@example.com

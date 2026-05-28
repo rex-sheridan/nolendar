@@ -600,6 +600,116 @@ describe("ApiNotionClient page icon writes", () => {
     );
   });
 
+  it("limits participant People relation resolution per meeting", async () => {
+    const dataSources = {
+      retrieve: vi.fn(),
+      update: vi.fn(),
+      query: vi.fn(async () => ({
+        results: [],
+      })),
+    };
+    const pages = {
+      create: vi
+        .fn()
+        .mockResolvedValueOnce({ id: "person-created" })
+        .mockResolvedValueOnce({ id: "meeting-page-1" }),
+      update: vi.fn(async () => undefined),
+    };
+    const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
+      dataSources,
+      pages,
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.createMeetingPage({
+      config: {
+        microsoft: { tenant: "common", authMode: "device_code" },
+        notion: {
+          databaseId: "meetings-data-source-id",
+          peopleDataSource: {
+            databaseId: "people-data-source-id",
+            nameProperty: "Name",
+            emailProperty: "Email Address",
+            maxAttendeesPerMeeting: 1,
+          },
+        },
+        calendars: [],
+        filters: {
+          ignoreDeclined: true,
+          requireAttendees: false,
+          ignorePersonal: false,
+          ignoreOptionalAttendance: false,
+        },
+        mapping: {
+          title: "Name",
+          due: "Due",
+          eventId: "Outlook Event ID",
+          changeKey: "Outlook ChangeKey",
+          participants: "Participants",
+        },
+        sync: {
+          lookahead: "today",
+          statePath: "/tmp/.nolendar/state.json",
+        },
+      },
+      dataSource: {
+        id: "meetings-data-source-id",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          Participants: { id: "participants", name: "Participants", type: "relation" },
+        },
+      },
+      meeting: {
+        id: "evt-1",
+        changeKey: "ck-1",
+        calendarId: "primary",
+        title: "Planning",
+        start: "2026-05-22T13:00:00.000Z",
+        end: "2026-05-22T14:00:00.000Z",
+        attendees: [
+          { name: "Alex", email: "alex@example.com", optional: false },
+          { name: "Casey", email: "casey@example.com", optional: false },
+        ],
+        isCancelled: false,
+        isRecurring: false,
+      },
+    });
+
+    expect(dataSources.query).toHaveBeenCalledTimes(1);
+    expect(dataSources.query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter: {
+          property: "Email Address",
+          email: {
+            equals: "alex@example.com",
+          },
+        },
+      }),
+    );
+    expect(pages.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          Participants: {
+            relation: [{ id: "person-created" }],
+          },
+        }),
+      }),
+    );
+  });
+
   it("prepends configured template blocks when creating a meeting page", async () => {
     const blocks = {
       children: {

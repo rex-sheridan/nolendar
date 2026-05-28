@@ -39,6 +39,7 @@ export interface NotionPeopleDataSourceConfig {
   databaseId: string;
   nameProperty: string;
   emailProperty: string;
+  maxAttendeesPerMeeting?: number;
 }
 
 export type NotionPageIconConfig =

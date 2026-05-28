@@ -329,8 +329,17 @@ export class ApiNotionClient implements NotionClient {
     }
 
     const resolvedPageIds = new Set<string>();
+    const maxAttendeesPerMeeting = peopleDataSource.maxAttendeesPerMeeting ?? 10;
+
+    if (maxAttendeesPerMeeting === 0) {
+      return [];
+    }
 
     for (const attendee of meeting.attendees) {
+      if (resolvedPageIds.size >= maxAttendeesPerMeeting) {
+        break;
+      }
+
       const email = attendee.email?.trim().toLowerCase();
 
       if (!email) {
