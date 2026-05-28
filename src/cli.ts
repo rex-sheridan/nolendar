@@ -17,16 +17,18 @@ import { writeDefaultConfig } from "./init-config.js";
 import { finalizeTemplatedMeetingPages } from "./finalize-templates.js";
 import { resolveNotionAuthToken } from "./notion/auth.js";
 import { ApiNotionClient } from "./notion/api-notion-client.js";
+import type { NotionClient } from "./notion/client.js";
 import { validateNotionSchema } from "./notion/schema.js";
 import { validateOrEnsureNotionSchema } from "./notion/validation.js";
 import { syncCalendarChangesToNotion } from "./delta-sync.js";
+import { listMeetingContentsForDay, type MeetingContentsDetail, type MeetingContentsSource } from "./meeting-contents.js";
 
 export interface CliDependencies {
   stdout: Pick<Console, "log">;
   stderr: Pick<Console, "error">;
   loadConfig?: typeof loadConfig;
   timingSink?: Pick<Console, "log">;
-  buildNotionClient?: (options?: { timingReporter?: ApiTimingReporter }) => ApiNotionClient;
+  buildNotionClient?: (options?: { timingReporter?: ApiTimingReporter }) => NotionClient;
 }
 
 export function createCli(deps: CliDependencies = defaultDeps()): Command {
@@ -88,6 +90,50 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         }
       }
     });
+
+  program
+    .command("meetings")
+    .description("Print meeting contents for a single day from Outlook or Notion.")
+    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("--source <source>", "Meeting source: outlook or notion", "outlook")
+    .option("--day <day>", "Day to inspect: today, tomorrow, yesterday, +/-Nd, or YYYY-MM-DD", "today")
+    .option("--full-properties", "Print all available normalized properties in addition to title/date/body", false)
+    .option("--timings", "Print API call timings", false)
+    .action(
+      async (options: {
+        config: string;
+        source: string;
+        day: string;
+        fullProperties: boolean;
+        timings: boolean;
+      }) => {
+        const config = await loadConfigFn(options.config);
+        const source = resolveMeetingContentsSource(options.source);
+        const detail: MeetingContentsDetail = options.fullProperties ? "full" : "compact";
+        const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+        const output = await listMeetingContentsForDay(
+          config,
+          {
+            source,
+            day: options.day,
+            detail,
+          },
+          source === "outlook"
+            ? {
+                meetingSource: buildGraphMeetingSource(config, deps, timingReporter),
+              }
+            : {
+                notion: buildNotionClientFn({
+                  timingReporter,
+                }),
+              },
+        );
+
+        for (const line of output) {
+          deps.stdout.log(line);
+        }
+      },
+    );
 
   program
     .command("validate-config")
@@ -279,6 +325,14 @@ function resolveLookahead(configLookahead: LookaheadWindow, cliLookahead?: strin
   }
 
   throw new Error("`--lookahead` must be `today` or a relative range like `12h`, `5d`, `2w`, or `3m`.");
+}
+
+function resolveMeetingContentsSource(value: string): MeetingContentsSource {
+  if (value === "outlook" || value === "notion") {
+    return value;
+  }
+
+  throw new Error("`--source` must be one of: outlook, notion.");
 }
 
 function defaultDeps(): CliDependencies {

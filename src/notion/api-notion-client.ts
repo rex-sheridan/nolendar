@@ -3,7 +3,13 @@ import { Client } from "@notionhq/client";
 import type { ApiTimingReporter } from "../api-timing.js";
 import type { NolendarConfig } from "../domain/config.js";
 import type { Meeting } from "../domain/meeting.js";
-import type { NotionDataSourceProperty, NotionDataSourceSchema, NotionPageRecord, RequiredNotionProperty } from "../domain/notion.js";
+import type {
+  NotionDataSourceProperty,
+  NotionDataSourceSchema,
+  NotionMeetingPage,
+  NotionPageRecord,
+  RequiredNotionProperty,
+} from "../domain/notion.js";
 import type { NotionClient } from "./client.js";
 import { buildMeetingChildren, buildMeetingProperties } from "./page-payload.js";
 
@@ -180,6 +186,69 @@ export class ApiNotionClient implements NotionClient {
       eventId: readRichTextProperty(first.properties?.[args.eventIdPropertyName]),
       changeKey: readRichTextProperty(first.properties?.[args.changeKeyPropertyName]),
     };
+  }
+
+  async listMeetingPagesForWindow(args: {
+    dataSourceId: string;
+    datePropertyName: string;
+    start: string;
+    end: string;
+  }): Promise<NotionMeetingPage[]> {
+    const pages: Array<{
+      id?: string;
+      object?: string;
+      url?: string;
+      properties?: Record<string, unknown>;
+    }> = [];
+    let nextCursor: string | undefined;
+
+    do {
+      const response = (await this.timed(
+        "dataSources.query",
+        `data_source_id=${args.dataSourceId} filter=${args.datePropertyName}:date ${args.start}..${args.end}`,
+        () =>
+          this.client.dataSources.query({
+            data_source_id: args.dataSourceId,
+            result_type: "page",
+            page_size: 100,
+            start_cursor: nextCursor,
+            filter: {
+              property: args.datePropertyName,
+              date: {
+                on_or_after: args.start,
+                before: args.end,
+              },
+            },
+            sorts: [
+              {
+                property: args.datePropertyName,
+                direction: "ascending",
+              },
+            ],
+          }),
+      )) as {
+        results?: Array<{
+          id?: string;
+          object?: string;
+          url?: string;
+          properties?: Record<string, unknown>;
+        }>;
+        next_cursor?: string | null;
+        has_more?: boolean;
+      };
+
+      pages.push(...(response.results ?? []).filter((entry) => entry.object === "page"));
+      nextCursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+    } while (nextCursor);
+
+    return Promise.all(
+      pages.map(async (page) => ({
+        id: page.id ?? "",
+        url: page.url,
+        properties: normalizePageProperties(page.properties ?? {}),
+        body: await this.getPageBodyMarkdown(page.id ?? ""),
+      })),
+    );
   }
 
   async createMeetingPage(args: {
@@ -504,6 +573,81 @@ export class ApiNotionClient implements NotionClient {
     return Promise.all(childBlocks.map((child) => this.sanitizeBlockForCreate(child)));
   }
 
+  private async getPageBodyMarkdown(pageId: string): Promise<string> {
+    if (!pageId) {
+      return "";
+    }
+
+    const blocks = await this.listBlockChildren(pageId);
+    const lines: string[] = [];
+
+    for (const block of blocks) {
+      lines.push(...(await this.renderBlockMarkdown(block)));
+    }
+
+    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  private async renderBlockMarkdown(block: Record<string, unknown>, indent = ""): Promise<string[]> {
+    const type = typeof block.type === "string" ? block.type : undefined;
+    const payload = type ? block[type] : undefined;
+    const record = payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
+    const text = richTextToPlainText(record.rich_text);
+    const lines: string[] = [];
+
+    switch (type) {
+      case "heading_1":
+        lines.push(`# ${text}`);
+        break;
+      case "heading_2":
+        lines.push(`## ${text}`);
+        break;
+      case "heading_3":
+        lines.push(`### ${text}`);
+        break;
+      case "bulleted_list_item":
+        lines.push(`${indent}- ${text}`);
+        break;
+      case "numbered_list_item":
+        lines.push(`${indent}1. ${text}`);
+        break;
+      case "to_do":
+        lines.push(`${indent}- [${record.checked ? "x" : " "}] ${text}`);
+        break;
+      case "quote":
+        lines.push(`> ${text}`);
+        break;
+      case "code":
+        lines.push("```", text, "```");
+        break;
+      case "divider":
+        lines.push("---");
+        break;
+      case "child_page":
+        lines.push(`[child page] ${typeof record.title === "string" ? record.title : ""}`.trim());
+        break;
+      case "paragraph":
+        if (text) {
+          lines.push(text);
+        }
+        break;
+      default:
+        if (text) {
+          lines.push(text);
+        }
+        break;
+    }
+
+    if ((block as { has_children?: boolean }).has_children && typeof block.id === "string") {
+      const children = await this.listBlockChildren(block.id);
+      for (const child of children) {
+        lines.push(...(await this.renderBlockMarkdown(child, `${indent}  `)));
+      }
+    }
+
+    return lines;
+  }
+
   private async pageHasGeneratedMeetingContent(pageId: string, config: NolendarConfig, meeting: Meeting): Promise<boolean> {
     const children = await this.listBlockChildren(pageId);
     const headings = new Set(
@@ -648,6 +792,108 @@ function normalizeProperties(
   }
 
   return normalized;
+}
+
+function normalizePageProperties(properties: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = {};
+
+  for (const [name, property] of Object.entries(properties)) {
+    normalized[name] = normalizePageProperty(property);
+  }
+
+  return normalized;
+}
+
+function normalizePageProperty(property: unknown): unknown {
+  const record = property && typeof property === "object" && !Array.isArray(property) ? (property as Record<string, unknown>) : {};
+  const type = typeof record.type === "string" ? record.type : undefined;
+
+  switch (type) {
+    case "title":
+      return richTextToPlainText(record.title);
+    case "rich_text":
+      return richTextToPlainText(record.rich_text);
+    case "date": {
+      const date = record.date && typeof record.date === "object" ? (record.date as Record<string, unknown>) : undefined;
+      return date
+        ? {
+            start: date.start,
+            end: date.end,
+            timeZone: date.time_zone,
+          }
+        : null;
+    }
+    case "email":
+    case "url":
+    case "phone_number":
+    case "number":
+    case "checkbox":
+      return record[type];
+    case "status": {
+      const status = record.status && typeof record.status === "object" ? (record.status as Record<string, unknown>) : undefined;
+      return status?.name ?? null;
+    }
+    case "select": {
+      const select = record.select && typeof record.select === "object" ? (record.select as Record<string, unknown>) : undefined;
+      return select?.name ?? null;
+    }
+    case "multi_select":
+      return Array.isArray(record.multi_select)
+        ? record.multi_select.map((entry) =>
+            entry && typeof entry === "object" ? (entry as { name?: string }).name : undefined,
+          ).filter(Boolean)
+        : [];
+    case "people":
+      return Array.isArray(record.people)
+        ? record.people.map((entry) => normalizePerson(entry)).filter((entry) => Object.keys(entry).length > 0)
+        : [];
+    case "relation":
+      return Array.isArray(record.relation)
+        ? record.relation.map((entry) => (entry && typeof entry === "object" ? (entry as { id?: string }).id : undefined)).filter(Boolean)
+        : [];
+    default:
+      return record[type ?? ""] ?? null;
+  }
+}
+
+function normalizePerson(value: unknown): Record<string, string> {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const person = record.person && typeof record.person === "object" ? (record.person as Record<string, unknown>) : {};
+  const normalized: Record<string, string> = {};
+
+  if (typeof record.id === "string") {
+    normalized.id = record.id;
+  }
+
+  if (typeof record.name === "string") {
+    normalized.name = record.name;
+  }
+
+  if (typeof person.email === "string") {
+    normalized.email = person.email;
+  }
+
+  return normalized;
+}
+
+function richTextToPlainText(value: unknown): string {
+  if (!Array.isArray(value)) {
+    return "";
+  }
+
+  return value
+    .map((entry) => {
+      const record = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+      const plainText = record.plain_text;
+      const text = record.text && typeof record.text === "object" ? (record.text as Record<string, unknown>) : undefined;
+      const content = text?.content;
+      const href = typeof record.href === "string" ? record.href : undefined;
+      const label = typeof plainText === "string" ? plainText : typeof content === "string" ? content : "";
+
+      return href && label ? `${label} (${href})` : label;
+    })
+    .join("")
+    .trim();
 }
 
 function propertyTypePayload(type: RequiredNotionProperty["type"]): Record<string, unknown> {

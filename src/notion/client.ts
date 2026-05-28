@@ -1,6 +1,6 @@
 import type { Meeting } from "../domain/meeting.js";
 import type { NolendarConfig } from "../domain/config.js";
-import type { NotionDataSourceSchema, NotionPageRecord, RequiredNotionProperty } from "../domain/notion.js";
+import type { NotionDataSourceSchema, NotionMeetingPage, NotionPageRecord, RequiredNotionProperty } from "../domain/notion.js";
 
 export interface NotionClient {
   retrieveDataSource(dataSourceId: string): Promise<NotionDataSourceSchema>;
@@ -13,6 +13,12 @@ export interface NotionClient {
     changeKeyPropertyName: string;
     eventId: string;
   }): Promise<NotionPageRecord | null>;
+  listMeetingPagesForWindow?(args: {
+    dataSourceId: string;
+    datePropertyName: string;
+    start: string;
+    end: string;
+  }): Promise<NotionMeetingPage[]>;
   createMeetingPage(args: {
     config: NolendarConfig;
     dataSource: NotionDataSourceSchema;

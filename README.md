@@ -331,6 +331,24 @@ Override the lookahead window:
 npm run dev -- list --config nolendar.yml --lookahead 5d
 ```
 
+Print AI-readable meeting contents for a single day from Outlook:
+
+```bash
+npm run dev -- meetings --config nolendar.yml
+```
+
+Inspect another day or read synced Notion pages instead:
+
+```bash
+npm run dev -- meetings --config nolendar.yml --day tomorrow --source notion
+```
+
+Include all normalized properties with each meeting:
+
+```bash
+npm run dev -- meetings --config nolendar.yml --source notion --full-properties
+```
+
 Validate the target Notion data source:
 
 ```bash

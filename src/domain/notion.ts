@@ -28,6 +28,13 @@ export interface NotionPageRecord {
   changeKey: string;
 }
 
+export interface NotionMeetingPage {
+  id: string;
+  url?: string;
+  properties: Record<string, unknown>;
+  body: string;
+}
+
 export interface RequiredNotionProperty {
   name: string;
   type: "title" | "date" | "rich_text" | "email" | "url" | "multi_select" | "people" | "relation";

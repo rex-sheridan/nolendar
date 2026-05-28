@@ -1017,3 +1017,118 @@ describe("ApiNotionClient page icon writes", () => {
     expect(blocks.children.append).not.toHaveBeenCalled();
   });
 });
+
+describe("ApiNotionClient.listMeetingPagesForWindow", () => {
+  it("queries pages by the meeting date property and renders readable page content", async () => {
+    const dataSources = {
+      retrieve: vi.fn(),
+      update: vi.fn(),
+      query: vi.fn(async () => ({
+        results: [
+          {
+            object: "page",
+            id: "page-1",
+            url: "https://notion.so/page-1",
+            properties: {
+              Name: {
+                type: "title",
+                title: [{ plain_text: "Planning" }],
+              },
+              Due: {
+                type: "date",
+                date: {
+                  start: "2026-05-22T13:00:00.000Z",
+                  end: "2026-05-22T13:30:00.000Z",
+                },
+              },
+              Status: {
+                type: "status",
+                status: {
+                  name: "Done",
+                },
+              },
+            },
+          },
+        ],
+        has_more: false,
+        next_cursor: null,
+      })),
+    };
+    const blocks = {
+      children: {
+        append: vi.fn(async () => undefined),
+        list: vi.fn(async () => ({
+          results: [
+            {
+              type: "heading_2",
+              heading_2: {
+                rich_text: [{ plain_text: "Meeting Details" }],
+              },
+            },
+            {
+              type: "paragraph",
+              paragraph: {
+                rich_text: [{ plain_text: "Discuss launch readiness." }],
+              },
+            },
+          ],
+          has_more: false,
+          next_cursor: null,
+        })),
+      },
+    };
+    const client = new ApiNotionClient("token", {
+      blocks,
+      dataSources,
+      pages: {
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await expect(
+      client.listMeetingPagesForWindow({
+        dataSourceId: "meetings",
+        datePropertyName: "Due",
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      }),
+    ).resolves.toEqual([
+      {
+        id: "page-1",
+        url: "https://notion.so/page-1",
+        properties: {
+          Name: "Planning",
+          Due: {
+            start: "2026-05-22T13:00:00.000Z",
+            end: "2026-05-22T13:30:00.000Z",
+            timeZone: undefined,
+          },
+          Status: "Done",
+        },
+        body: "## Meeting Details\nDiscuss launch readiness.",
+      },
+    ]);
+    expect(dataSources.query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data_source_id: "meetings",
+        filter: {
+          property: "Due",
+          date: {
+            on_or_after: "2026-05-22T00:00:00.000Z",
+            before: "2026-05-23T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+    expect(blocks.children.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        block_id: "page-1",
+      }),
+    );
+  });
+});

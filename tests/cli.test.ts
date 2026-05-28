@@ -15,6 +15,7 @@ describe("cli", () => {
     expect(commandNames).toEqual([
       "list-calendars",
       "list",
+      "meetings",
       "validate-config",
       "validate-notion",
       "print-notion-schema",
