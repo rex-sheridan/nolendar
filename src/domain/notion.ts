@@ -35,7 +35,13 @@ export interface NotionMeetingPage {
   body: string;
 }
 
+export interface NotionMeetingPageProperties {
+  id: string;
+  url?: string;
+  properties: Record<string, unknown>;
+}
+
 export interface RequiredNotionProperty {
   name: string;
-  type: "title" | "date" | "rich_text" | "email" | "url" | "multi_select" | "people" | "relation";
+  type: "title" | "date" | "rich_text" | "email" | "url" | "status" | "multi_select" | "people" | "relation";
 }

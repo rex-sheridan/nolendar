@@ -203,6 +203,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--force-update", "Update matching Notion pages even when the Outlook changeKey is unchanged", false)
     .option("--finalize-delay-ms <ms>", "Delay in milliseconds before the native-template finalize pass", "3000")
     .option("--timings", "Print API call timings", false)
+    .option("--verbose", "Print per-meeting sync decisions", false)
     .action(
       async (options: {
         config: string;
@@ -212,6 +213,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         forceUpdate: boolean;
         finalizeDelayMs: string;
         timings: boolean;
+        verbose: boolean;
       }) => {
       const startedAt = Date.now();
       const config = await loadConfigFn(options.config);
@@ -237,6 +239,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
             dryRun: options.dryRun,
             ensureProperties: options.ensureProperties,
             forceUpdate: options.forceUpdate,
+            onDecision: options.verbose ? (message) => deps.stdout.log(message) : undefined,
           },
         },
       );

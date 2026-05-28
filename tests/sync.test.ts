@@ -79,6 +79,7 @@ describe("syncMeetingsToNotion", () => {
       findPageByEventId: vi.fn(async () => null),
       createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
       updateMeetingPage: vi.fn(async () => undefined),
+      setPageStatus: vi.fn(async () => undefined),
       archivePage: vi.fn(async () => undefined),
       finalizeMeetingPageContent: vi.fn(async () => "appended"),
     };
@@ -336,6 +337,202 @@ describe("syncMeetingsToNotion", () => {
     expect(notion.archivePage).toHaveBeenCalledWith("page-1");
     expect(notion.createMeetingPage).not.toHaveBeenCalled();
     expect(notion.updateMeetingPage).not.toHaveBeenCalled();
+  });
+
+  it("sets a configured status for a cancelled meeting when archiving is disabled", async () => {
+    const config: NolendarConfig = {
+      ...CONFIG,
+      notion: {
+        ...CONFIG.notion,
+        canceledMeetings: {
+          action: "set_status",
+          statusProperty: "Status",
+          statusValue: "Canceled",
+        },
+      },
+    };
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
+          Assignee: { id: "assignee", name: "Assignee", type: "people" },
+          Status: { id: "status", name: "Status", type: "status" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => "user-1"),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => ({ id: "page-1", eventId: "evt-1", changeKey: "old" })),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      setPageStatus: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
+    };
+
+    const result = await syncMeetingsToNotion(
+      config,
+      [
+        {
+          ...MEETING,
+          isCancelled: true,
+        },
+      ],
+      notion,
+    );
+
+    expect(result).toEqual({
+      created: 0,
+      updated: 1,
+      archived: 0,
+      skipped: 0,
+      filtered: 0,
+      dryRun: false,
+    });
+    expect(notion.setPageStatus).toHaveBeenCalledWith({
+      pageId: "page-1",
+      propertyName: "Status",
+      statusName: "Canceled",
+    });
+    expect(notion.archivePage).not.toHaveBeenCalled();
+    expect(notion.createMeetingPage).not.toHaveBeenCalled();
+    expect(notion.updateMeetingPage).not.toHaveBeenCalled();
+  });
+
+  it("handles cancelled meetings before normal filters are applied", async () => {
+    const config: NolendarConfig = {
+      ...CONFIG,
+      filters: {
+        ...CONFIG.filters,
+        ignoreDeclined: true,
+        ignorePatterns: [".*Planning.*"],
+      },
+      notion: {
+        ...CONFIG.notion,
+        canceledMeetings: {
+          action: "set_status",
+          statusProperty: "Status",
+          statusValue: "Canceled",
+        },
+      },
+    };
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
+          Assignee: { id: "assignee", name: "Assignee", type: "people" },
+          Status: { id: "status", name: "Status", type: "status" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => "user-1"),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => ({ id: "page-1", eventId: "evt-1", changeKey: "old" })),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      setPageStatus: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
+    };
+
+    const result = await syncMeetingsToNotion(
+      config,
+      [
+        {
+          ...MEETING,
+          isCancelled: true,
+          responseStatus: "declined",
+        },
+      ],
+      notion,
+    );
+
+    expect(result).toEqual({
+      created: 0,
+      updated: 1,
+      archived: 0,
+      skipped: 0,
+      filtered: 0,
+      dryRun: false,
+    });
+    expect(notion.setPageStatus).toHaveBeenCalledWith({
+      pageId: "page-1",
+      propertyName: "Status",
+      statusName: "Canceled",
+    });
+    expect(notion.archivePage).not.toHaveBeenCalled();
+  });
+
+  it("reports verbose decisions for cancelled status updates", async () => {
+    const decisions: string[] = [];
+    const config: NolendarConfig = {
+      ...CONFIG,
+      notion: {
+        ...CONFIG.notion,
+        canceledMeetings: {
+          action: "set_status",
+          statusProperty: "Status",
+          statusValue: "Canceled",
+        },
+      },
+    };
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          "Source URL": { id: "source-url", name: "Source URL", type: "url" },
+          Tags: { id: "tags", name: "Tags", type: "multi_select" },
+          Assignee: { id: "assignee", name: "Assignee", type: "people" },
+          Status: { id: "status", name: "Status", type: "status" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => "user-1"),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => ({ id: "page-1", eventId: "evt-1", changeKey: "old" })),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      setPageStatus: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
+    };
+
+    await syncMeetingsToNotion(
+      config,
+      [
+        {
+          ...MEETING,
+          isCancelled: true,
+        },
+      ],
+      notion,
+      {
+        onDecision: (message) => decisions.push(message),
+      },
+    );
+
+    expect(decisions).toContain(
+      'sync decision: title="Planning" eventId=evt-1 pageId=page-1 decision=set_status_cancelled property=Status value=Canceled',
+    );
   });
 
   it("does not create a new page for a cancelled meeting that has not been synced before", async () => {

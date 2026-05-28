@@ -80,6 +80,50 @@ describe("ApiNotionClient.getDefaultAssigneeUserId", () => {
   });
 });
 
+describe("ApiNotionClient.setPageStatus", () => {
+  it("updates a Notion status property by name", async () => {
+    const pages = {
+      create: vi.fn(),
+      update: vi.fn(async () => undefined),
+    };
+    const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
+      dataSources: {
+        retrieve: vi.fn(),
+        update: vi.fn(),
+        query: vi.fn(),
+      },
+      pages,
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.setPageStatus({
+      pageId: "page-1",
+      propertyName: "Status",
+      statusName: "Canceled",
+    });
+
+    expect(pages.update).toHaveBeenCalledWith({
+      page_id: "page-1",
+      properties: {
+        Status: {
+          status: {
+            name: "Canceled",
+          },
+        },
+      },
+    });
+  });
+});
+
 describe("ApiNotionClient page icon writes", () => {
   it("records timing entries for Notion API calls when a reporter is configured", async () => {
     const timingReporter = {
@@ -1130,5 +1174,74 @@ describe("ApiNotionClient.listMeetingPagesForWindow", () => {
         block_id: "page-1",
       }),
     );
+  });
+
+  it("can query page properties without reading page blocks", async () => {
+    const dataSources = {
+      retrieve: vi.fn(),
+      update: vi.fn(),
+      query: vi.fn(async () => ({
+        results: [
+          {
+            object: "page",
+            id: "page-1",
+            url: "https://notion.so/page-1",
+            properties: {
+              Name: {
+                type: "title",
+                title: [{ plain_text: "Planning" }],
+              },
+              "Outlook Event ID": {
+                type: "rich_text",
+                rich_text: [{ plain_text: "evt-1" }],
+              },
+            },
+          },
+        ],
+        has_more: false,
+        next_cursor: null,
+      })),
+    };
+    const blocks = {
+      children: {
+        append: vi.fn(async () => undefined),
+        list: vi.fn(async () => ({
+          results: [],
+          has_more: false,
+          next_cursor: null,
+        })),
+      },
+    };
+    const client = new ApiNotionClient("token", {
+      blocks,
+      dataSources,
+      pages: {
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await expect(
+      client.listMeetingPagePropertiesForWindow({
+        dataSourceId: "meetings",
+        datePropertyName: "Due",
+        start: "2026-05-22T00:00:00.000Z",
+        end: "2026-05-23T00:00:00.000Z",
+      }),
+    ).resolves.toEqual([
+      {
+        id: "page-1",
+        url: "https://notion.so/page-1",
+        properties: {
+          Name: "Planning",
+          "Outlook Event ID": "evt-1",
+        },
+      },
+    ]);
+    expect(blocks.children.list).not.toHaveBeenCalled();
   });
 });

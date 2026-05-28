@@ -27,6 +27,31 @@ describe("normalizeConfig", () => {
     expect(config.filters.ignoreDeclined).toBe(true);
     expect(config.filters.ignoreNames).toEqual([]);
     expect(config.filters.ignorePatterns).toEqual([]);
+    expect(config.notion.canceledMeetings).toEqual({ action: "archive" });
+  });
+
+  it("accepts status mapping for canceled meetings", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        canceledMeetings: {
+          action: "set_status",
+          statusProperty: "Status",
+          statusValue: "Canceled",
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+    });
+
+    expect(config.notion.canceledMeetings).toEqual({
+      action: "set_status",
+      statusProperty: "Status",
+      statusValue: "Canceled",
+    });
   });
 
   it("accepts name-based filters", () => {
@@ -302,6 +327,27 @@ describe("normalizeConfig", () => {
       }),
     ).toThrowError(
       new ConfigError("`notion.peopleDataSource.maxAttendeesPerMeeting` must be a non-negative integer."),
+    );
+  });
+
+  it("rejects status mapping for canceled meetings without a status value", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+          canceledMeetings: {
+            action: "set_status",
+            statusProperty: "Status",
+          },
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+      }),
+    ).toThrowError(
+      new ConfigError("`notion.canceledMeetings.statusValue` is required when action is `set_status`."),
     );
   });
 

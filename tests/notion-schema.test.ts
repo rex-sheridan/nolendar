@@ -58,6 +58,22 @@ describe("buildRequiredNotionProperties", () => {
       { name: "Participants", type: "relation" },
     ]);
   });
+
+  it("requires a status property when canceled meetings are mapped to status", () => {
+    expect(
+      buildRequiredNotionProperties({
+        ...CONFIG,
+        notion: {
+          ...CONFIG.notion,
+          canceledMeetings: {
+            action: "set_status",
+            statusProperty: "Status",
+            statusValue: "Canceled",
+          },
+        },
+      }),
+    ).toContainEqual({ name: "Status", type: "status" });
+  });
 });
 
 describe("validateNotionSchema", () => {

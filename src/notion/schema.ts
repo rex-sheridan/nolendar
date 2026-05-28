@@ -61,6 +61,15 @@ export function buildRequiredNotionProperties(config: NolendarConfig): RequiredN
     });
   }
 
+  const canceledMeetings = config.notion.canceledMeetings ?? { action: "archive" };
+
+  if (canceledMeetings.action === "set_status") {
+    required.push({
+      name: canceledMeetings.statusProperty,
+      type: "status",
+    });
+  }
+
   return required;
 }
 

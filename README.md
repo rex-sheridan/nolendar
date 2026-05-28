@@ -110,6 +110,10 @@ notion:
     nameProperty: Name
     emailProperty: Email Address
     maxAttendeesPerMeeting: 10
+  canceledMeetings:
+    action: set_status
+    statusProperty: Status
+    statusValue: Canceled
   defaultTags:
     - meeting
   defaultAssigneeEmail: you@example.com
@@ -167,6 +171,7 @@ sync:
 - `filters.ignoreNames` skips events whose title exactly matches one of the configured strings
 - `filters.ignorePatterns` skips events whose title matches one of the configured JavaScript regular expressions
 - `notion.peopleDataSource.maxAttendeesPerMeeting` defaults to `10`; set it lower to reduce Notion People lookups for large meetings, or `0` to skip participant relation association while still creating meeting pages
+- `notion.canceledMeetings.action` defaults to `archive`; set it to `set_status` with `statusProperty` and `statusValue` to mark matching pages, for example `Status: Canceled`
 
 ## Notion Setup
 
@@ -182,6 +187,7 @@ Nolendar validates these properties on the target meeting data source:
 - multi-select property mapped by `mapping.tags`, if configured and `notion.defaultTags` is non-empty
 - people property mapped by `mapping.assignee`, if configured
 - relation property mapped by `mapping.participants`, if configured
+- status property mapped by `notion.canceledMeetings.statusProperty`, if `notion.canceledMeetings.action` is `set_status`
 
 If `notion.peopleDataSource` is configured, Nolendar also validates that data source for:
 
@@ -447,9 +453,10 @@ The current sync implementation:
 - looks up existing Notion pages by the configured Outlook event ID property
 - skips updates when the stored `changeKey` matches unless `--force-update` is used
 - updates existing pages when the `changeKey` differs
-- archives matching Notion pages for cancelled meetings that were previously synced
+- archives matching Notion pages for cancelled meetings that were previously synced, unless `notion.canceledMeetings.action` is `set_status`
+- sets the configured status value on matching Notion pages for cancelled meetings when `notion.canceledMeetings.action` is `set_status`
 - skips creating new pages for cancelled meetings
-- archives matching Notion pages when Graph delta reports deleted events
+- archives matching Notion pages when Graph delta reports deleted events, or sets the configured status when `notion.canceledMeetings.action` is `set_status`
 - collapses multiple delta changes for the same recurring occurrence to the latest final state before sync
 - persists delta state only after a successful non-dry-run sync
 

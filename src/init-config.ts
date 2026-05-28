@@ -21,6 +21,10 @@ notion:
     nameProperty: Name
     emailProperty: Email Address
     maxAttendeesPerMeeting: 10
+  canceledMeetings:
+    action: set_status
+    statusProperty: Status
+    statusValue: Canceled
   defaultTags:
     - meeting
   defaultAssigneeEmail: you@example.com

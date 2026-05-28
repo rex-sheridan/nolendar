@@ -1,14 +1,17 @@
 import type { NolendarConfig } from "./domain/config.js";
 import type { Meeting } from "./domain/meeting.js";
 import type { NotionClient } from "./notion/client.js";
-import { shouldSyncMeeting } from "./filters.js";
+import { getMeetingFilterReason } from "./filters.js";
 import { validateOrEnsureNotionSchema } from "./notion/validation.js";
 
 export interface SyncOptions {
   dryRun?: boolean;
   ensureProperties?: boolean;
   forceUpdate?: boolean;
+  onDecision?: SyncDecisionReporter;
 }
+
+export type SyncDecisionReporter = (message: string) => void;
 
 export interface SyncResult {
   created: number;
@@ -40,11 +43,6 @@ export async function syncMeetingsToNotion(
   };
 
   for (const meeting of meetings) {
-    if (!shouldSyncMeeting(meeting, config.filters)) {
-      result.filtered += 1;
-      continue;
-    }
-
     const existing = await notion.findPageByEventId({
       dataSourceId: dataSource.id,
       eventIdPropertyName: config.mapping.eventId,
@@ -52,13 +50,47 @@ export async function syncMeetingsToNotion(
       eventId: meeting.id,
     });
 
-    if (!existing) {
-      if (meeting.isCancelled) {
+    options.onDecision?.(
+      formatMeetingDecisionPrefix(meeting, existing?.id) +
+        ` changeKey=${meeting.changeKey} notionChangeKey=${existing?.changeKey ?? "-"} cancelled=${meeting.isCancelled}`,
+    );
+
+    if (meeting.isCancelled) {
+      if (!existing) {
         result.skipped += 1;
+        options.onDecision?.(`${formatMeetingDecisionPrefix(meeting)} decision=skip_cancelled_missing_page`);
         continue;
       }
 
+      const action = getCanceledMeetingAction(config);
+
+      if (action.action === "archive") {
+        result.archived += 1;
+        options.onDecision?.(`${formatMeetingDecisionPrefix(meeting, existing.id)} decision=archive_cancelled`);
+      } else {
+        result.updated += 1;
+        options.onDecision?.(
+          `${formatMeetingDecisionPrefix(meeting, existing.id)} decision=set_status_cancelled property=${action.statusProperty} value=${action.statusValue}`,
+        );
+      }
+
+      if (!options.dryRun) {
+        await applyCanceledMeetingAction(config, notion, existing.id);
+      }
+      continue;
+    }
+
+    const filterReason = getMeetingFilterReason(meeting, config.filters);
+
+    if (filterReason) {
+      result.filtered += 1;
+      options.onDecision?.(`${formatMeetingDecisionPrefix(meeting, existing?.id)} decision=filtered reason=${filterReason}`);
+      continue;
+    }
+
+    if (!existing) {
       result.created += 1;
+      options.onDecision?.(`${formatMeetingDecisionPrefix(meeting)} decision=create`);
       if (!options.dryRun) {
         await notion.createMeetingPage({
           config,
@@ -69,20 +101,14 @@ export async function syncMeetingsToNotion(
       continue;
     }
 
-    if (meeting.isCancelled) {
-      result.archived += 1;
-      if (!options.dryRun) {
-        await notion.archivePage(existing.id);
-      }
-      continue;
-    }
-
     if (existing.changeKey === meeting.changeKey && !options.forceUpdate) {
       result.skipped += 1;
+      options.onDecision?.(`${formatMeetingDecisionPrefix(meeting, existing.id)} decision=skip_change_key_match`);
       continue;
     }
 
     result.updated += 1;
+    options.onDecision?.(`${formatMeetingDecisionPrefix(meeting, existing.id)} decision=update`);
     if (!options.dryRun) {
       await notion.updateMeetingPage({
         pageId: existing.id,
@@ -94,4 +120,38 @@ export async function syncMeetingsToNotion(
   }
 
   return result;
+}
+
+export async function applyCanceledMeetingAction(
+  config: NolendarConfig,
+  notion: NotionClient,
+  pageId: string,
+): Promise<"archived" | "updated"> {
+  const action = getCanceledMeetingAction(config);
+
+  if (action.action === "archive") {
+    await notion.archivePage(pageId);
+    return "archived";
+  }
+
+  if (!notion.setPageStatus) {
+    throw new Error("The configured Notion client does not support setting page status properties.");
+  }
+
+  await notion.setPageStatus({
+    pageId,
+    propertyName: action.statusProperty,
+    statusName: action.statusValue,
+  });
+  return "updated";
+}
+
+export function getCanceledMeetingAction(
+  config: NolendarConfig,
+): NonNullable<NolendarConfig["notion"]["canceledMeetings"]> {
+  return config.notion.canceledMeetings ?? { action: "archive" };
+}
+
+function formatMeetingDecisionPrefix(meeting: Meeting, pageId?: string): string {
+  return `sync decision: title=${JSON.stringify(meeting.title)} eventId=${meeting.id} pageId=${pageId ?? "-"}`;
 }

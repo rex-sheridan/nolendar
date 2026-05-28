@@ -105,6 +105,7 @@ function normalizeNotion(value: unknown): NotionConfig {
   );
   const pageIcon = normalizeNotionPageIcon(record.pageIcon);
   const peopleDataSource = normalizePeopleDataSource(record.peopleDataSource);
+  const canceledMeetings = normalizeCanceledMeetings(record.canceledMeetings);
 
   return {
     databaseId,
@@ -115,6 +116,7 @@ function normalizeNotion(value: unknown): NotionConfig {
     defaultAssigneeEmail,
     pageIcon,
     peopleDataSource,
+    canceledMeetings,
   };
 }
 
@@ -361,6 +363,39 @@ function normalizePeopleDataSource(value: unknown): NotionConfig["peopleDataSour
       "`notion.peopleDataSource.maxAttendeesPerMeeting` must be a non-negative integer.",
     ),
   };
+}
+
+function normalizeCanceledMeetings(value: unknown): NotionConfig["canceledMeetings"] {
+  if (value === undefined) {
+    return {
+      action: "archive",
+    };
+  }
+
+  const record = asRecord(value, "`notion.canceledMeetings` must be an object.");
+  const action = requireString(record.action, "`notion.canceledMeetings.action` is required.");
+
+  if (action === "archive") {
+    return {
+      action,
+    };
+  }
+
+  if (action === "set_status") {
+    return {
+      action,
+      statusProperty: requireString(
+        record.statusProperty,
+        "`notion.canceledMeetings.statusProperty` is required when action is `set_status`.",
+      ),
+      statusValue: requireString(
+        record.statusValue,
+        "`notion.canceledMeetings.statusValue` is required when action is `set_status`.",
+      ),
+    };
+  }
+
+  throw new ConfigError("`notion.canceledMeetings.action` must be one of: archive, set_status.");
 }
 
 function normalizeDataSourceTemplate(value: unknown): NotionConfig["dataSourceTemplate"] {

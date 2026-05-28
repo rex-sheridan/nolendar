@@ -2,37 +2,41 @@ import type { FiltersConfig } from "./domain/config.js";
 import type { Meeting } from "./domain/meeting.js";
 
 export function shouldSyncMeeting(meeting: Meeting, filters: FiltersConfig): boolean {
+  return getMeetingFilterReason(meeting, filters) === undefined;
+}
+
+export function getMeetingFilterReason(meeting: Meeting, filters: FiltersConfig): string | undefined {
   if (filters.ignoreNames?.includes(meeting.title)) {
-    return false;
+    return "ignoreNames";
   }
 
   const ignorePatterns = filters.ignorePatterns ?? filters.ignoreNamePatterns;
 
   if (ignorePatterns?.some((pattern) => new RegExp(pattern).test(meeting.title))) {
-    return false;
+    return "ignorePatterns";
   }
 
   if (filters.ignoreDeclined && meeting.responseStatus === "declined") {
-    return false;
+    return "ignoreDeclined";
   }
 
   if (filters.ignorePersonal && isPersonalMeeting(meeting)) {
-    return false;
+    return "ignorePersonal";
   }
 
   if (filters.ignoreOptionalAttendance && meeting.isOptionalForOwner) {
-    return false;
+    return "ignoreOptionalAttendance";
   }
 
   if (filters.requireAttendees && meeting.attendees.length === 0) {
-    return false;
+    return "requireAttendees";
   }
 
   if (filters.minDurationMinutes !== undefined && meetingDurationMinutes(meeting) < filters.minDurationMinutes) {
-    return false;
+    return "minDurationMinutes";
   }
 
-  return true;
+  return undefined;
 }
 
 function meetingDurationMinutes(meeting: Meeting): number {

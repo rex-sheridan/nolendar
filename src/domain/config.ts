@@ -16,7 +16,18 @@ export interface NotionConfig {
   defaultAssigneeEmail?: string;
   pageIcon?: NotionPageIconConfig;
   peopleDataSource?: NotionPeopleDataSourceConfig;
+  canceledMeetings?: NotionCanceledMeetingsConfig;
 }
+
+export type NotionCanceledMeetingsConfig =
+  | {
+      action: "archive";
+    }
+  | {
+      action: "set_status";
+      statusProperty: string;
+      statusValue: string;
+    };
 
 export interface NotionDataSourceTemplateConfig {
   type: "default" | "template_id";

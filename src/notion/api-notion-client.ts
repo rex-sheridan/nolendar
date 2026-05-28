@@ -7,6 +7,7 @@ import type {
   NotionDataSourceProperty,
   NotionDataSourceSchema,
   NotionMeetingPage,
+  NotionMeetingPageProperties,
   NotionPageRecord,
   RequiredNotionProperty,
 } from "../domain/notion.js";
@@ -194,6 +195,22 @@ export class ApiNotionClient implements NotionClient {
     start: string;
     end: string;
   }): Promise<NotionMeetingPage[]> {
+    const pages = await this.listMeetingPagePropertiesForWindow(args);
+
+    return Promise.all(
+      pages.map(async (page) => ({
+        ...page,
+        body: await this.getPageBodyMarkdown(page.id),
+      })),
+    );
+  }
+
+  async listMeetingPagePropertiesForWindow(args: {
+    dataSourceId: string;
+    datePropertyName: string;
+    start: string;
+    end: string;
+  }): Promise<NotionMeetingPageProperties[]> {
     const pages: Array<{
       id?: string;
       object?: string;
@@ -241,14 +258,11 @@ export class ApiNotionClient implements NotionClient {
       nextCursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
     } while (nextCursor);
 
-    return Promise.all(
-      pages.map(async (page) => ({
-        id: page.id ?? "",
-        url: page.url,
-        properties: normalizePageProperties(page.properties ?? {}),
-        body: await this.getPageBodyMarkdown(page.id ?? ""),
-      })),
-    );
+    return pages.map((page) => ({
+      id: page.id ?? "",
+      url: page.url,
+      properties: normalizePageProperties(page.properties ?? {}),
+    }));
   }
 
   async createMeetingPage(args: {
@@ -325,6 +339,25 @@ export class ApiNotionClient implements NotionClient {
       this.client.pages.update({
         page_id: pageId,
         archived: true,
+      }),
+    );
+  }
+
+  async setPageStatus(args: {
+    pageId: string;
+    propertyName: string;
+    statusName: string;
+  }): Promise<void> {
+    await this.timed("pages.update", `page_id=${args.pageId} status=${args.propertyName}:${args.statusName}`, () =>
+      this.client.pages.update({
+        page_id: args.pageId,
+        properties: {
+          [args.propertyName]: {
+            status: {
+              name: args.statusName,
+            },
+          },
+        },
       }),
     );
   }
@@ -908,6 +941,8 @@ function propertyTypePayload(type: RequiredNotionProperty["type"]): Record<strin
       return { email: {} };
     case "url":
       return { url: {} };
+    case "status":
+      return { status: {} };
     case "multi_select":
       return { multi_select: { options: [] } };
     case "people":
