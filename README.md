@@ -6,6 +6,8 @@
 
 Nolendar reads upcoming meetings from Outlook Calendar via Microsoft Graph and turns them into structured Notion pages for notes, action items, and related meeting context.
 
+See [docs/architecture.md](docs/architecture.md) for Mermaid architecture and process-flow diagrams.
+
 ## Current Status
 
 Implemented now:
