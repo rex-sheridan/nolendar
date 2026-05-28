@@ -1,5 +1,9 @@
 # nolendar
 
+  <p align="center">
+    <img src="docs/assets/nolendar-logo.png" alt="Nolendar logo" width="180">
+  </p>
+
 Nolendar reads upcoming meetings from Outlook Calendar via Microsoft Graph and turns them into structured Notion pages for notes, action items, and related meeting context.
 
 ## Current Status
