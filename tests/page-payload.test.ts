@@ -140,4 +140,60 @@ describe("buildMeetingProperties", () => {
       ),
     ).toBe(false);
   });
+
+  it("splits long meeting details into Notion-safe paragraph blocks", () => {
+    const children = buildMeetingChildren(
+      {
+        ...CONFIG,
+        notion: {
+          ...CONFIG.notion,
+          pageContent: {
+            sections: ["meeting_details"],
+          },
+        },
+      },
+      {
+        ...MEETING,
+        details: `${"A".repeat(1990)} ${"B".repeat(700)}`,
+      },
+    ) as Array<Record<string, unknown>>;
+    const paragraphs = children.filter((child) => child.type === "paragraph");
+    const contents = paragraphs.map(
+      (child) =>
+        (child.paragraph as { rich_text?: Array<{ text?: { content?: string } }> }).rich_text?.[0]?.text?.content ?? "",
+    );
+
+    expect(paragraphs).toHaveLength(2);
+    expect(contents.every((content) => content.length <= 2000)).toBe(true);
+    expect(contents.join("")).toBe(`${"A".repeat(1990)}${"B".repeat(700)}`);
+  });
+
+  it("does not split after the Notion text limit when a sentence break starts at the boundary", () => {
+    const children = buildMeetingChildren(
+      {
+        ...CONFIG,
+        notion: {
+          ...CONFIG.notion,
+          pageContent: {
+            sections: ["meeting_details"],
+          },
+        },
+      },
+      {
+        ...MEETING,
+        details: `${"A".repeat(2000)}. ${"B".repeat(20)}`,
+      },
+    ) as Array<Record<string, unknown>>;
+    const contents = children
+      .filter((child) => child.type === "paragraph")
+      .map(
+        (child) =>
+          (child.paragraph as { rich_text?: Array<{ text?: { content?: string } }> }).rich_text?.[0]?.text?.content ??
+          "",
+      );
+
+    expect(contents).toHaveLength(2);
+    expect(contents.every((content) => content.length <= 2000)).toBe(true);
+    expect(contents[0]).toHaveLength(2000);
+  });
 });

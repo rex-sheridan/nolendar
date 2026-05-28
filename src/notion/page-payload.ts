@@ -2,6 +2,8 @@ import type { NolendarConfig } from "../domain/config.js";
 import type { Meeting } from "../domain/meeting.js";
 import type { NotionDataSourceSchema } from "../domain/notion.js";
 
+const NOTION_TEXT_CONTENT_LIMIT = 2000;
+
 export function buildMeetingProperties(
   config: NolendarConfig,
   dataSource: NotionDataSourceSchema,
@@ -69,16 +71,16 @@ export function buildMeetingChildren(config: NolendarConfig, meeting: Meeting): 
       case "meeting_details":
         if (meeting.details || meeting.agenda) {
           children.push(headingBlock("Meeting Details"));
-          children.push(paragraphBlock(meeting.details ?? meeting.agenda ?? ""));
+          children.push(...paragraphBlocks(meeting.details ?? meeting.agenda ?? ""));
         }
         break;
       case "notes":
         children.push(headingBlock("Notes"));
-        children.push(paragraphBlock(" "));
+        children.push(...paragraphBlocks(" "));
         break;
       case "action_items":
         children.push(headingBlock("Action items"));
-        children.push(paragraphBlock(" "));
+        children.push(...paragraphBlocks(" "));
         break;
     }
   }
@@ -208,6 +210,10 @@ function headingBlock(content: string): unknown {
   };
 }
 
+function paragraphBlocks(content: string): unknown[] {
+  return splitTextContent(content).map(paragraphBlock);
+}
+
 function paragraphBlock(content: string): unknown {
   return {
     object: "block",
@@ -216,6 +222,38 @@ function paragraphBlock(content: string): unknown {
       rich_text: [textBlock(content)],
     },
   };
+}
+
+function splitTextContent(content: string): string[] {
+  if (content.length <= NOTION_TEXT_CONTENT_LIMIT) {
+    return [content];
+  }
+
+  const chunks: string[] = [];
+  let remaining = content;
+
+  while (remaining.length > NOTION_TEXT_CONTENT_LIMIT) {
+    const splitAt = findSplitIndex(remaining);
+    chunks.push(remaining.slice(0, splitAt).trimEnd());
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+
+  if (remaining.length > 0) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
+
+function findSplitIndex(value: string): number {
+  const hardLimit = Math.min(value.length, NOTION_TEXT_CONTENT_LIMIT);
+  const preferredBreak = Math.max(
+    value.lastIndexOf("\n", hardLimit - 1),
+    value.lastIndexOf(". ", hardLimit - 1),
+    value.lastIndexOf(" ", hardLimit - 1),
+  );
+
+  return preferredBreak > 0 ? Math.min(preferredBreak + 1, hardLimit) : hardLimit;
 }
 
 function linkParagraphBlock(label: string, url: string): unknown {
