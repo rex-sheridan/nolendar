@@ -134,6 +134,10 @@ filters:
   requireAttendees: false
   ignorePersonal: false
   ignoreOptionalAttendance: false
+  ignoreNames:
+    - Focus time
+  ignorePatterns:
+    - "^OOO"
 
 mapping:
   title: Name
@@ -160,6 +164,8 @@ sync:
 - `sync.lookahead` defaults to `today`
 - `sync.lookahead` also accepts relative ranges like `12h`, `5d`, `2w`, and `3m`
 - `sync.statePath` defaults to `.nolendar/state.json`, resolved relative to the config file
+- `filters.ignoreNames` skips events whose title exactly matches one of the configured strings
+- `filters.ignorePatterns` skips events whose title matches one of the configured JavaScript regular expressions
 - `notion.peopleDataSource.maxAttendeesPerMeeting` defaults to `10`; set it lower to reduce Notion People lookups for large meetings, or `0` to skip participant relation association while still creating meeting pages
 
 ## Notion Setup

@@ -139,10 +139,20 @@ function normalizeFilters(value: unknown): FiltersConfig {
     record.minDurationMinutes,
     "`filters.minDurationMinutes` must be a positive number.",
   );
+  const ignoreNames = optionalStringArray(
+    record.ignoreNames,
+    "`filters.ignoreNames` must be an array of non-empty strings.",
+  );
+  const ignorePatterns = optionalStringArray(
+    record.ignorePatterns ?? record.ignoreNamePatterns,
+    "`filters.ignorePatterns` must be an array of non-empty strings.",
+  );
 
   if (minDurationMinutes !== undefined && minDurationMinutes <= 0) {
     throw new ConfigError("`filters.minDurationMinutes` must be a positive number.");
   }
+
+  validateRegexPatterns(ignorePatterns, "filters.ignorePatterns");
 
   return {
     ignoreDeclined: optionalBoolean(record.ignoreDeclined, true, "`filters.ignoreDeclined` must be a boolean."),
@@ -154,7 +164,20 @@ function normalizeFilters(value: unknown): FiltersConfig {
       false,
       "`filters.ignoreOptionalAttendance` must be a boolean.",
     ),
+    ignoreNames: ignoreNames ?? [],
+    ignorePatterns: ignorePatterns ?? [],
   };
+}
+
+function validateRegexPatterns(patterns: string[] | undefined, path: string): void {
+  patterns?.forEach((pattern, index) => {
+    try {
+      new RegExp(pattern);
+    } catch (error) {
+      const detail = error instanceof Error ? ` ${error.message}` : "";
+      throw new ConfigError(`\`${path}[${index}]\` must be a valid regular expression.${detail}`);
+    }
+  });
 }
 
 function normalizeMapping(value: unknown): MappingConfig {

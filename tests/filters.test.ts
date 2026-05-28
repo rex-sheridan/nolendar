@@ -99,6 +99,45 @@ describe("shouldSyncMeeting", () => {
     ).toBe(false);
   });
 
+  it("filters meetings with ignored exact names", () => {
+    expect(
+      shouldSyncMeeting(BASE_MEETING, {
+        ...BASE_FILTERS,
+        ignoreNames: ["Planning"],
+      }),
+    ).toBe(false);
+  });
+
+  it("filters meetings matching ignored name regex patterns", () => {
+    expect(
+      shouldSyncMeeting(
+        {
+          ...BASE_MEETING,
+          title: "Daily standup",
+        },
+        {
+          ...BASE_FILTERS,
+          ignorePatterns: ["^Daily\\s+standup$"],
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps support for the previous ignored name regex key", () => {
+    expect(
+      shouldSyncMeeting(
+        {
+          ...BASE_MEETING,
+          title: "Daily standup",
+        },
+        {
+          ...BASE_FILTERS,
+          ignoreNamePatterns: ["^Daily\\s+standup$"],
+        },
+      ),
+    ).toBe(false);
+  });
+
   it("keeps eligible meetings", () => {
     expect(
       shouldSyncMeeting(

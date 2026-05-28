@@ -2,6 +2,16 @@ import type { FiltersConfig } from "./domain/config.js";
 import type { Meeting } from "./domain/meeting.js";
 
 export function shouldSyncMeeting(meeting: Meeting, filters: FiltersConfig): boolean {
+  if (filters.ignoreNames?.includes(meeting.title)) {
+    return false;
+  }
+
+  const ignorePatterns = filters.ignorePatterns ?? filters.ignoreNamePatterns;
+
+  if (ignorePatterns?.some((pattern) => new RegExp(pattern).test(meeting.title))) {
+    return false;
+  }
+
   if (filters.ignoreDeclined && meeting.responseStatus === "declined") {
     return false;
   }

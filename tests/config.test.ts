@@ -25,6 +25,46 @@ describe("normalizeConfig", () => {
     expect(config.sync.statePath).toBe(path.resolve("/tmp", ".nolendar/state.json"));
     expect(config.mapping.eventId).toBe("Outlook Event ID");
     expect(config.filters.ignoreDeclined).toBe(true);
+    expect(config.filters.ignoreNames).toEqual([]);
+    expect(config.filters.ignorePatterns).toEqual([]);
+  });
+
+  it("accepts name-based filters", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+      filters: {
+        ignoreNames: ["Daily standup", "Focus time"],
+        ignorePatterns: ["^OOO", "1:1 with .+"],
+      },
+    });
+
+    expect(config.filters.ignoreNames).toEqual(["Daily standup", "Focus time"]);
+    expect(config.filters.ignorePatterns).toEqual(["^OOO", "1:1 with .+"]);
+  });
+
+  it("accepts the previous ignoreNamePatterns key", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+      filters: {
+        ignoreNamePatterns: ["^OOO"],
+      },
+    });
+
+    expect(config.filters.ignorePatterns).toEqual(["^OOO"]);
   });
 
   it("accepts a default assignee email", () => {
@@ -373,6 +413,24 @@ describe("normalizeConfig", () => {
         "`notion.pageContent.sections[1]` must be one of: meeting_link, calendar_event, meeting_details, notes, action_items.",
       ),
     );
+  });
+
+  it("rejects invalid name regex filters", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+        },
+        calendars: [
+          {
+            id: "team",
+          },
+        ],
+        filters: {
+          ignorePatterns: ["["],
+        },
+      }),
+    ).toThrowError(/`filters\.ignorePatterns\[0\]` must be a valid regular expression\./);
   });
 
   it("accepts the authorization code auth mode", () => {

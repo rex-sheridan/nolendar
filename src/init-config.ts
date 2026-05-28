@@ -45,6 +45,10 @@ filters:
   requireAttendees: false
   ignorePersonal: false
   ignoreOptionalAttendance: false
+  ignoreNames:
+    - Focus time
+  ignorePatterns:
+    - "^OOO"
 
 mapping:
   title: Name

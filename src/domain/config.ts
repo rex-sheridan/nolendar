@@ -64,6 +64,9 @@ export interface FiltersConfig {
   requireAttendees: boolean;
   ignorePersonal: boolean;
   ignoreOptionalAttendance: boolean;
+  ignoreNames?: string[];
+  ignorePatterns?: string[];
+  ignoreNamePatterns?: string[];
 }
 
 export interface MappingConfig {
