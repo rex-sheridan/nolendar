@@ -2,6 +2,7 @@ import { Command } from "commander";
 
 import { createConsoleTimingReporter, type ApiTimingReporter } from "./api-timing.js";
 import { loadConfig } from "./config.js";
+import { ReadlineConfigWizardPrompt, runConfigWizard, type ConfigWizardPrompt } from "./config-wizard.js";
 import type { MicrosoftAuthMode, MicrosoftConfig, NolendarConfig } from "./domain/config.js";
 import { resolveGraphAuthConfig } from "./graph/auth.js";
 import { AuthorizationCodeTokenProvider } from "./graph/authorization-code-token-provider.js";
@@ -29,6 +30,9 @@ export interface CliDependencies {
   loadConfig?: typeof loadConfig;
   timingSink?: Pick<Console, "log">;
   buildNotionClient?: (options?: { timingReporter?: ApiTimingReporter }) => NotionClient;
+  configWizardPrompt?: ConfigWizardPrompt;
+  stdin?: NodeJS.ReadableStream;
+  output?: NodeJS.WritableStream;
 }
 
 export function createCli(deps: CliDependencies = defaultDeps()): Command {
@@ -291,12 +295,47 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .description("Generate a starter nolendar.yml config file.")
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .option("--force", "Overwrite an existing config file", false)
-    .action(async (options: { config: string; force: boolean }) => {
+    .option("--wizard", "Guide setup interactively", false)
+    .action(async (options: { config: string; force: boolean; wizard: boolean }) => {
+      if (options.wizard) {
+        const writtenPath = await runConfigWizard({
+          configPath: options.config,
+          force: options.force,
+          prompt: deps.configWizardPrompt ?? new ReadlineConfigWizardPrompt(deps.stdin ?? process.stdin, deps.output ?? process.stdout, deps.stdout),
+          stdout: deps.stdout,
+          notion: buildNotionClientFn(),
+          listCalendars: async (microsoft) =>
+            buildGraphMeetingSourceFromMicrosoftConfig(microsoft, deps).listCalendars(),
+        });
+
+        deps.stdout.log(`Wrote config to ${writtenPath}`);
+        return;
+      }
+
       const writtenPath = await writeDefaultConfig(options.config, {
         force: options.force,
       });
 
       deps.stdout.log(`Wrote starter config to ${writtenPath}`);
+    });
+
+  program
+    .command("wizard")
+    .description("Guide setup of a nolendar.yml config file.")
+    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("--force", "Overwrite an existing config file", false)
+    .action(async (options: { config: string; force: boolean }) => {
+      const writtenPath = await runConfigWizard({
+        configPath: options.config,
+        force: options.force,
+        prompt: deps.configWizardPrompt ?? new ReadlineConfigWizardPrompt(deps.stdin ?? process.stdin, deps.output ?? process.stdout, deps.stdout),
+        stdout: deps.stdout,
+        notion: buildNotionClientFn(),
+        listCalendars: async (microsoft) =>
+          buildGraphMeetingSourceFromMicrosoftConfig(microsoft, deps).listCalendars(),
+      });
+
+      deps.stdout.log(`Wrote config to ${writtenPath}`);
     });
 
   program.exitOverride();

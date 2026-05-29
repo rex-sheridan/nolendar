@@ -58,6 +58,7 @@ export function buildRequiredNotionProperties(config: NolendarConfig): RequiredN
     required.push({
       name: config.mapping.participants,
       type: "relation",
+      relationDataSourceId: config.notion.peopleDataSource?.databaseId,
     });
   }
 

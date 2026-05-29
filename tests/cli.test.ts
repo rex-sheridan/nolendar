@@ -22,6 +22,7 @@ describe("cli", () => {
       "sync",
       "finalize-templates",
       "init",
+      "wizard",
     ]);
   });
 

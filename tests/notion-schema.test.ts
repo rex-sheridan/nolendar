@@ -55,7 +55,7 @@ describe("buildRequiredNotionProperties", () => {
       { name: "Source URL", type: "url" },
       { name: "Tags", type: "multi_select" },
       { name: "Assignee", type: "people" },
-      { name: "Participants", type: "relation" },
+      { name: "Participants", type: "relation", relationDataSourceId: "people-data-source-id" },
     ]);
   });
 

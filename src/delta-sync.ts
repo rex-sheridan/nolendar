@@ -136,23 +136,24 @@ async function reconcileMissingNotionMeetings(
   window: CalendarWindow,
   syncOptions: SyncOptions,
 ): Promise<{ archived: number; updated: number }> {
-  const listPageProperties = notion.listMeetingPagePropertiesForWindow ?? notion.listMeetingPagesForWindow;
-
-  if (!listPageProperties) {
+  if (!notion.listMeetingPagePropertiesForWindow && !notion.listMeetingPagesForWindow) {
     return { archived: 0, updated: 0 };
   }
 
   const currentEventIds = new Set(meetings.map((meeting) => meeting.id));
-  const pages = await listPageProperties({
+  const queryArgs = {
     dataSourceId: config.notion.databaseId,
     datePropertyName: config.mapping.due,
     start: window.start,
     end: window.end,
-  });
+  };
+  const pages = notion.listMeetingPagePropertiesForWindow
+    ? await notion.listMeetingPagePropertiesForWindow(queryArgs)
+    : await notion.listMeetingPagesForWindow?.(queryArgs);
   let archived = 0;
   let updated = 0;
 
-  for (const page of pages) {
+  for (const page of pages ?? []) {
     const eventId = readStringProperty(page.properties[config.mapping.eventId]);
 
     if (!eventId || currentEventIds.has(eventId)) {

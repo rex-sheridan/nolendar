@@ -542,4 +542,61 @@ describe("syncCalendarChangesToNotion", () => {
       statusName: "Canceled",
     });
   });
+
+  it("preserves the Notion client receiver when reconciling missing pages", async () => {
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => undefined),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => ({
+        id: "page-1",
+        eventId: "evt-1",
+        changeKey: "ck-1",
+      })),
+      listMeetingPagePropertiesForWindow: vi.fn(async function (this: { marker?: string }) {
+        if (this.marker !== "bound-notion") {
+          throw new Error("Notion method receiver was not preserved.");
+        }
+
+        return [];
+      }),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
+      marker: "bound-notion",
+    };
+
+    await expect(
+      syncCalendarChangesToNotion(CONFIG, notion, {
+        meetingSource: {
+          listMeetingChanges: vi.fn(async () => ({
+            meetings: [MEETING],
+            removedEventIds: [],
+            deltaLink: "delta-1",
+          })),
+        },
+        loadState: vi.fn(async () => ({
+          version: 1 as const,
+          calendars: {},
+        })),
+        saveState: vi.fn(async () => undefined),
+        clock: {
+          now: () => new Date("2026-05-23T15:00:00.000Z"),
+        },
+      }),
+    ).resolves.toMatchObject({
+      skipped: 1,
+    });
+  });
 });

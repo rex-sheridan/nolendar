@@ -22,6 +22,17 @@ export interface NotionDataSourceSchema {
   properties: Record<string, NotionDataSourceProperty>;
 }
 
+export interface NotionDataSourceSummary {
+  id: string;
+  title?: string;
+}
+
+export interface NotionDataSourceTemplateSummary {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
 export interface NotionPageRecord {
   id: string;
   eventId: string;
@@ -44,4 +55,5 @@ export interface NotionMeetingPageProperties {
 export interface RequiredNotionProperty {
   name: string;
   type: "title" | "date" | "rich_text" | "email" | "url" | "status" | "multi_select" | "people" | "relation";
+  relationDataSourceId?: string;
 }

@@ -20,16 +20,14 @@ export async function validateOrEnsureNotionSchema(
 ): Promise<void> {
   let schema = await notion.retrieveDataSource(config.notion.databaseId);
   let result = validateNotionSchema(config, schema);
-  const ensureableMissing = result.missing.filter((property) => property.type !== "relation");
 
   if (
     !result.valid &&
     options.ensureProperties &&
-    ensureableMissing.length > 0 &&
-    ensureableMissing.length === result.missing.length &&
+    result.missing.length > 0 &&
     result.mismatched.length === 0
   ) {
-    await notion.ensureProperties(config.notion.databaseId, ensureableMissing);
+    await notion.ensureProperties(config.notion.databaseId, result.missing);
     schema = await notion.retrieveDataSource(config.notion.databaseId);
     result = validateNotionSchema(config, schema);
   }

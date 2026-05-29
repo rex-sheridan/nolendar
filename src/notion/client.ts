@@ -2,6 +2,8 @@ import type { Meeting } from "../domain/meeting.js";
 import type { NolendarConfig } from "../domain/config.js";
 import type {
   NotionDataSourceSchema,
+  NotionDataSourceSummary,
+  NotionDataSourceTemplateSummary,
   NotionMeetingPage,
   NotionMeetingPageProperties,
   NotionPageRecord,
@@ -9,6 +11,8 @@ import type {
 } from "../domain/notion.js";
 
 export interface NotionClient {
+  listDataSources?(): Promise<NotionDataSourceSummary[]>;
+  listDataSourceTemplates?(dataSourceId: string): Promise<NotionDataSourceTemplateSummary[]>;
   retrieveDataSource(dataSourceId: string): Promise<NotionDataSourceSchema>;
   getDefaultAssigneeUserId(defaultAssigneeEmail?: string): Promise<string | undefined>;
   getTemplateBlocks(templatePageId: string): Promise<unknown[]>;

@@ -6,6 +6,8 @@ import type { Meeting } from "../domain/meeting.js";
 import type {
   NotionDataSourceProperty,
   NotionDataSourceSchema,
+  NotionDataSourceSummary,
+  NotionDataSourceTemplateSummary,
   NotionMeetingPage,
   NotionMeetingPageProperties,
   NotionPageRecord,
@@ -27,6 +29,7 @@ interface NotionSdkClient {
     retrieve(args: { data_source_id: string }): Promise<unknown>;
     update(args: { data_source_id: string; properties: Record<string, unknown> }): Promise<unknown>;
     query(args: Record<string, unknown>): Promise<unknown>;
+    listTemplates?(args: { data_source_id: string; start_cursor?: string; page_size?: number }): Promise<unknown>;
   };
   pages: {
     create(args: Record<string, unknown>): Promise<unknown>;
@@ -36,6 +39,7 @@ interface NotionSdkClient {
     me(): Promise<unknown>;
     list(args?: { start_cursor?: string; page_size?: number }): Promise<unknown>;
   };
+  search?(args: Record<string, unknown>): Promise<unknown>;
 }
 
 export class ApiNotionClient implements NotionClient {
@@ -55,6 +59,53 @@ export class ApiNotionClient implements NotionClient {
     this.timingReporter = timingReporter;
   }
 
+  async listDataSources(): Promise<NotionDataSourceSummary[]> {
+    const search = this.client.search;
+
+    if (!search) {
+      return [];
+    }
+
+    const dataSources: NotionDataSourceSummary[] = [];
+    let nextCursor: string | undefined;
+
+    do {
+      const response = (await this.timed(
+        "search",
+        `filter=data_source start_cursor=${nextCursor ?? "-"}`,
+        () =>
+        search({
+          filter: {
+            property: "object",
+            value: "data_source",
+          },
+          page_size: 100,
+          start_cursor: nextCursor,
+        }),
+      )) as {
+        results?: Array<{
+          id?: string;
+          object?: string;
+          title?: Array<{ plain_text?: string }>;
+        }>;
+        next_cursor?: string | null;
+        has_more?: boolean;
+      };
+
+      dataSources.push(
+        ...(response.results ?? [])
+          .filter((entry) => entry.object === "data_source" && typeof entry.id === "string")
+          .map((entry) => ({
+            id: entry.id ?? "",
+            title: entry.title?.map((title) => title.plain_text ?? "").join("") || undefined,
+          })),
+      );
+      nextCursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+    } while (nextCursor);
+
+    return dataSources.sort((left, right) => (left.title ?? left.id).localeCompare(right.title ?? right.id));
+  }
+
   async retrieveDataSource(dataSourceId: string): Promise<NotionDataSourceSchema> {
     const response = (await this.timed("dataSources.retrieve", `data_source_id=${dataSourceId}`, () =>
       this.client.dataSources.retrieve({
@@ -71,6 +122,51 @@ export class ApiNotionClient implements NotionClient {
       title: response.title?.map((entry) => entry.plain_text ?? "").join(""),
       properties: normalizeProperties(response.properties),
     };
+  }
+
+  async listDataSourceTemplates(dataSourceId: string): Promise<NotionDataSourceTemplateSummary[]> {
+    const listTemplates = this.client.dataSources.listTemplates;
+
+    if (!listTemplates) {
+      return [];
+    }
+
+    const templates: NotionDataSourceTemplateSummary[] = [];
+    let nextCursor: string | undefined;
+
+    do {
+      const response = (await this.timed(
+        "dataSources.listTemplates",
+        `data_source_id=${dataSourceId} start_cursor=${nextCursor ?? "-"}`,
+        () =>
+        listTemplates({
+          data_source_id: dataSourceId,
+          page_size: 100,
+          start_cursor: nextCursor,
+        }),
+      )) as {
+        templates?: Array<{
+          id?: string;
+          name?: string;
+          is_default?: boolean;
+        }>;
+        next_cursor?: string | null;
+        has_more?: boolean;
+      };
+
+      templates.push(
+        ...(response.templates ?? [])
+          .filter((template) => typeof template.id === "string")
+          .map((template) => ({
+            id: template.id ?? "",
+            name: template.name || template.id || "",
+            isDefault: template.is_default ?? false,
+          })),
+      );
+      nextCursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+    } while (nextCursor);
+
+    return templates.sort(compareDataSourceTemplates);
   }
 
   async getDefaultAssigneeUserId(defaultAssigneeEmail?: string): Promise<string | undefined> {
@@ -133,7 +229,7 @@ export class ApiNotionClient implements NotionClient {
     const payload: Record<string, unknown> = {};
 
     for (const property of properties) {
-      payload[property.name] = propertyTypePayload(property.type);
+      payload[property.name] = propertyTypePayload(property);
     }
 
     await this.timed(
@@ -929,8 +1025,19 @@ function richTextToPlainText(value: unknown): string {
     .trim();
 }
 
-function propertyTypePayload(type: RequiredNotionProperty["type"]): Record<string, unknown> {
-  switch (type) {
+function compareDataSourceTemplates(
+  left: NotionDataSourceTemplateSummary,
+  right: NotionDataSourceTemplateSummary,
+): number {
+  if (left.isDefault !== right.isDefault) {
+    return left.isDefault ? -1 : 1;
+  }
+
+  return left.name.localeCompare(right.name);
+}
+
+function propertyTypePayload(property: RequiredNotionProperty): Record<string, unknown> {
+  switch (property.type) {
     case "title":
       return { title: {} };
     case "date":
@@ -948,7 +1055,16 @@ function propertyTypePayload(type: RequiredNotionProperty["type"]): Record<strin
     case "people":
       return { people: {} };
     case "relation":
-      throw new Error("Relation properties cannot be auto-created by Nolendar. Create the relation in Notion first.");
+      if (!property.relationDataSourceId) {
+        throw new Error("Relation properties require a target data source ID.");
+      }
+
+      return {
+        relation: {
+          data_source_id: property.relationDataSourceId,
+          single_property: {},
+        },
+      };
   }
 }
 

@@ -4,6 +4,98 @@ import type { NolendarConfig } from "../src/domain/config.js";
 import type { Meeting } from "../src/domain/meeting.js";
 import { ApiNotionClient } from "../src/notion/api-notion-client.js";
 
+describe("ApiNotionClient.ensureProperties", () => {
+  it("creates relation properties with the configured target data source", async () => {
+    const dataSources = {
+      retrieve: vi.fn(),
+      update: vi.fn(async () => undefined),
+      query: vi.fn(),
+    };
+    const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
+      dataSources,
+      pages: {
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.ensureProperties("meeting-id", [
+      {
+        name: "Participants",
+        type: "relation",
+        relationDataSourceId: "people-id",
+      },
+    ]);
+
+    expect(dataSources.update).toHaveBeenCalledWith({
+      data_source_id: "meeting-id",
+      properties: {
+        Participants: {
+          relation: {
+            data_source_id: "people-id",
+            single_property: {},
+          },
+        },
+      },
+    });
+  });
+});
+
+describe("ApiNotionClient.listDataSourceTemplates", () => {
+  it("lists templates for a data source", async () => {
+    const listTemplates = vi.fn(async () => ({
+      templates: [
+        { id: "template-2", name: "Review", is_default: false },
+        { id: "template-1", name: "Default", is_default: true },
+      ],
+      has_more: false,
+      next_cursor: null,
+    }));
+    const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
+      dataSources: {
+        retrieve: vi.fn(),
+        update: vi.fn(),
+        query: vi.fn(),
+        listTemplates,
+      },
+      pages: {
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await expect(client.listDataSourceTemplates("meeting-id")).resolves.toEqual([
+      { id: "template-1", name: "Default", isDefault: true },
+      { id: "template-2", name: "Review", isDefault: false },
+    ]);
+    expect(listTemplates).toHaveBeenCalledWith({
+      data_source_id: "meeting-id",
+      page_size: 100,
+      start_cursor: undefined,
+    });
+  });
+});
+
 describe("ApiNotionClient.getDefaultAssigneeUserId", () => {
   it("resolves a people property assignee from defaultAssigneeEmail", async () => {
     const client = new ApiNotionClient("token", {
