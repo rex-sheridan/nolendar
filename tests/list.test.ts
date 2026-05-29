@@ -45,10 +45,15 @@ describe("resolveWindow", () => {
     now: () => new Date("2026-05-22T15:30:00.000Z"),
   };
 
-  it("uses the full current UTC day for today", () => {
+  it("uses the full current local day for today", () => {
+    const start = new Date(clock.now());
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
     expect(resolveWindow("today", clock)).toEqual({
-      start: "2026-05-22T00:00:00.000Z",
-      end: "2026-05-23T00:00:00.000Z",
+      start: start.toISOString(),
+      end: end.toISOString(),
     });
   });
 
@@ -129,9 +134,13 @@ describe("listMeetings", () => {
       },
     });
 
+    const window = resolveWindow("today", {
+      now: () => new Date("2026-05-22T09:00:00.000Z"),
+    });
+
     expect(calls).toEqual([
-      "primary:2026-05-22T00:00:00.000Z:2026-05-23T00:00:00.000Z",
-      "team:2026-05-22T00:00:00.000Z:2026-05-23T00:00:00.000Z",
+      `primary:${window.start}:${window.end}`,
+      `team:${window.start}:${window.end}`,
     ]);
     expect(result.meetings.map((meeting) => meeting.title)).toEqual(["Planning", "Standup"]);
   });

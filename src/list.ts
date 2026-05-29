@@ -57,9 +57,9 @@ export function resolveWindow(lookahead: LookaheadWindow, clock: Clock = systemC
   let end = new Date(start);
 
   if (lookahead === "today") {
-    start.setUTCHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
     end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 1);
+    end.setDate(end.getDate() + 1);
   } else {
     const relative = parseRelativeLookahead(lookahead);
 

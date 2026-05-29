@@ -160,6 +160,13 @@ async function reconcileMissingNotionMeetings(
       continue;
     }
 
+    if (!isPageDateWithinWindow(page.properties[config.mapping.due], window)) {
+      syncOptions.onDecision?.(
+        `sync decision: notionEventId=${eventId} pageId=${page.id} decision=skip_missing_outside_window`,
+      );
+      continue;
+    }
+
     const action = getCanceledMeetingAction(config);
 
     if (action.action === "set_status") {
@@ -191,6 +198,41 @@ async function reconcileMissingNotionMeetings(
 
 function readStringProperty(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+function isPageDateWithinWindow(value: unknown, window: CalendarWindow): boolean {
+  const date = readDatePropertyStart(value);
+
+  if (!date) {
+    return false;
+  }
+
+  return date >= window.start && date < window.end;
+}
+
+function readDatePropertyStart(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return normalizeDateString(value);
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const start = (value as { start?: unknown }).start;
+
+  return typeof start === "string" ? normalizeDateString(start) : undefined;
+}
+
+function normalizeDateString(value: string): string | undefined {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map((part) => Number.parseInt(part, 10));
+    return new Date(year, month - 1, day).toISOString();
+  }
+
+  const parsed = new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
 }
 
 function canReuseDelta(

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { NolendarConfig } from "../src/domain/config.js";
 import type { Meeting } from "../src/domain/meeting.js";
 import { syncCalendarChangesToNotion } from "../src/delta-sync.js";
+import { resolveWindow } from "../src/list.js";
 
 const CONFIG: NolendarConfig = {
   microsoft: {
@@ -51,6 +52,9 @@ const MEETING: Meeting = {
 
 describe("syncCalendarChangesToNotion", () => {
   it("reuses a stored delta link when the saved window still matches", async () => {
+    const window = resolveWindow("today", {
+      now: () => new Date("2026-05-23T15:00:00.000Z"),
+    });
     const meetingSource = {
       listMeetingChanges: vi.fn(async () => ({
         meetings: [MEETING],
@@ -83,10 +87,7 @@ describe("syncCalendarChangesToNotion", () => {
       calendars: {
         primary: {
           lookahead: "today" as const,
-          window: {
-            start: "2026-05-23T00:00:00.000Z",
-            end: "2026-05-24T00:00:00.000Z",
-          },
+          window,
           deltaLink: "delta-1",
           updatedAt: "2026-05-23T12:00:00.000Z",
         },
@@ -105,10 +106,7 @@ describe("syncCalendarChangesToNotion", () => {
 
     expect(meetingSource.listMeetingChanges).toHaveBeenCalledWith({
       calendar: CONFIG.calendars[0],
-      window: {
-        start: "2026-05-23T00:00:00.000Z",
-        end: "2026-05-24T00:00:00.000Z",
-      },
+      window,
       deltaLink: "delta-1",
     });
     expect(saveState).toHaveBeenCalledWith(CONFIG.sync.statePath, {
@@ -116,10 +114,7 @@ describe("syncCalendarChangesToNotion", () => {
       calendars: {
         primary: {
           lookahead: "today",
-          window: {
-            start: "2026-05-23T00:00:00.000Z",
-            end: "2026-05-24T00:00:00.000Z",
-          },
+          window,
           deltaLink: "delta-2",
           updatedAt: "2026-05-23T15:00:00.000Z",
         },
@@ -130,6 +125,9 @@ describe("syncCalendarChangesToNotion", () => {
   });
 
   it("falls back to a fresh calendar view delta when the saved window no longer matches", async () => {
+    const window = resolveWindow("today", {
+      now: () => new Date("2026-05-23T15:00:00.000Z"),
+    });
     const meetingSource = {
       listMeetingChanges: vi.fn(async () => ({
         meetings: [MEETING],
@@ -182,10 +180,7 @@ describe("syncCalendarChangesToNotion", () => {
 
     expect(meetingSource.listMeetingChanges).toHaveBeenCalledWith({
       calendar: CONFIG.calendars[0],
-      window: {
-        start: "2026-05-23T00:00:00.000Z",
-        end: "2026-05-24T00:00:00.000Z",
-      },
+      window,
       deltaLink: undefined,
     });
   });
@@ -498,6 +493,9 @@ describe("syncCalendarChangesToNotion", () => {
           id: "page-missing",
           properties: {
             "Outlook Event ID": "evt-missing-from-outlook",
+            Due: {
+              start: "2026-05-23T13:00:00.000Z",
+            },
             Status: "Scheduled",
           },
           body: "",
@@ -530,12 +528,12 @@ describe("syncCalendarChangesToNotion", () => {
 
     expect(result.updated).toBe(1);
     expect(result.archived).toBe(0);
-    expect(notion.listMeetingPagePropertiesForWindow).toHaveBeenCalledWith({
-      dataSourceId: "data-source-id",
-      datePropertyName: "Due",
-      start: "2026-05-23T00:00:00.000Z",
-      end: "2026-05-24T00:00:00.000Z",
-    });
+    expect(notion.listMeetingPagePropertiesForWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dataSourceId: "data-source-id",
+        datePropertyName: "Due",
+      }),
+    );
     expect(notion.setPageStatus).toHaveBeenCalledWith({
       pageId: "page-missing",
       propertyName: "Status",
@@ -598,5 +596,82 @@ describe("syncCalendarChangesToNotion", () => {
     ).resolves.toMatchObject({
       skipped: 1,
     });
+  });
+
+  it("does not cancel Notion pages outside the active sync window", async () => {
+    const config: NolendarConfig = {
+      ...CONFIG,
+      notion: {
+        ...CONFIG.notion,
+        canceledMeetings: {
+          action: "set_status",
+          statusProperty: "Status",
+          statusValue: "Canceled",
+        },
+      },
+    };
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          Status: { id: "status", name: "Status", type: "status" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => undefined),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => null),
+      listMeetingPagePropertiesForWindow: vi.fn(async () => [
+        {
+          id: "page-yesterday",
+          properties: {
+            "Outlook Event ID": "evt-yesterday",
+            Due: {
+              start: "2026-05-22T13:00:00.000Z",
+            },
+            Status: "Scheduled",
+          },
+          body: "",
+        },
+      ]),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      setPageStatus: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
+    };
+    const decisions: string[] = [];
+
+    const result = await syncCalendarChangesToNotion(config, notion, {
+      meetingSource: {
+        listMeetingChanges: vi.fn(async () => ({
+          meetings: [],
+          removedEventIds: [],
+          deltaLink: "delta-1",
+        })),
+      },
+      loadState: vi.fn(async () => ({
+        version: 1 as const,
+        calendars: {},
+      })),
+      saveState: vi.fn(async () => undefined),
+      clock: {
+        now: () => new Date("2026-05-23T15:00:00.000Z"),
+      },
+      syncOptions: {
+        onDecision: (decision) => decisions.push(decision),
+      },
+    });
+
+    expect(result.updated).toBe(0);
+    expect(notion.setPageStatus).not.toHaveBeenCalled();
+    expect(decisions).toContain(
+      "sync decision: notionEventId=evt-yesterday pageId=page-yesterday decision=skip_missing_outside_window",
+    );
   });
 });
