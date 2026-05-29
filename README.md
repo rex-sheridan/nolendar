@@ -26,7 +26,6 @@ Implemented now:
 
 Remaining work is mostly polish:
 
-- auth/runtime cleanup
 - optional MCP-based Notion integration
 
 ## Quickstart
