@@ -37,13 +37,25 @@ Remaining work is mostly polish:
 npm install
 ```
 
-2. Generate a starter config:
+2. Make the local CLI available as `nolendar`:
 
 ```bash
-npm run dev -- init
+export PATH="$PATH:$(pwd)/bin"
 ```
 
-3. Follow [AUTHENTICATION.md](AUTHENTICATION.md) to set up:
+To keep it available in new shells, add that line to `~/.zshrc`, or use an alias:
+
+```bash
+alias nolendar="$(pwd)/bin/nolendar"
+```
+
+3. Generate a starter config:
+
+```bash
+nolendar init
+```
+
+4. Follow [AUTHENTICATION.md](AUTHENTICATION.md) to set up:
    - Microsoft authentication
    - your Notion token
    - the target Notion data source ID
@@ -51,31 +63,31 @@ npm run dev -- init
    To discover Outlook calendar IDs after setting `MICROSOFT_CLIENT_ID`:
 
 ```bash
-npm run dev -- list-calendars
+nolendar list-calendars
 ```
 
-4. Validate config:
+5. Validate config:
 
 ```bash
-npm run dev -- validate-config --config nolendar.yml
+nolendar validate-config --config nolendar.yml
 ```
 
-5. Validate Notion access and schema:
+6. Validate Notion access and schema:
 
 ```bash
-npm run dev -- validate-notion --config nolendar.yml
+nolendar validate-notion --config nolendar.yml
 ```
 
-6. Preview sync without writing:
+7. Preview sync without writing:
 
 ```bash
-npm run dev -- sync --config nolendar.yml --dry-run
+nolendar sync --config nolendar.yml --dry-run
 ```
 
-7. Run sync:
+8. Run sync:
 
 ```bash
-npm run dev -- sync --config nolendar.yml
+nolendar sync --config nolendar.yml
 ```
 
 ## Requirements

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+if [[ -d "$PROJECT_DIR/node_modules/tsx" ]]; then
+  exec node --import tsx "$PROJECT_DIR/src/index.ts" "$@"
+fi
+
+if [[ -f "$PROJECT_DIR/dist/src/index.js" ]]; then
+  exec node "$PROJECT_DIR/dist/src/index.js" "$@"
+fi
+
+echo "nolendar dependencies are missing. Run npm install in $PROJECT_DIR, then try again." >&2
+exit 1
