@@ -541,6 +541,119 @@ describe("syncCalendarChangesToNotion", () => {
     });
   });
 
+  it("reconciles missing Notion pages even when reusing stored delta state", async () => {
+    const window = resolveWindow("today", {
+      now: () => new Date("2026-05-23T15:00:00.000Z"),
+    });
+    const config: NolendarConfig = {
+      ...CONFIG,
+      notion: {
+        ...CONFIG.notion,
+        canceledMeetings: {
+          action: "set_status",
+          statusProperty: "Status",
+          statusValue: "Canceled",
+        },
+      },
+    };
+    const meetingSource = {
+      listMeetingChanges: vi
+        .fn()
+        .mockResolvedValueOnce({
+          meetings: [],
+          removedEventIds: [],
+          deltaLink: "delta-2",
+        })
+        .mockResolvedValueOnce({
+          meetings: [],
+          removedEventIds: [],
+          deltaLink: "fresh-delta-unused",
+        }),
+    };
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          Status: { id: "status", name: "Status", type: "status" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => undefined),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi.fn(async () => null),
+      listMeetingPagePropertiesForWindow: vi.fn(async () => [
+        {
+          id: "page-canceled",
+          properties: {
+            "Outlook Event ID": "evt-canceled",
+            Due: {
+              start: "2026-05-23T13:00:00.000Z",
+            },
+            Status: "Scheduled",
+          },
+          body: "",
+        },
+      ]),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      setPageStatus: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
+    };
+    const saveState = vi.fn(async () => undefined);
+
+    const result = await syncCalendarChangesToNotion(config, notion, {
+      meetingSource,
+      loadState: vi.fn(async () => ({
+        version: 1 as const,
+        calendars: {
+          primary: {
+            lookahead: "today" as const,
+            window,
+            deltaLink: "delta-1",
+            updatedAt: "2026-05-23T12:00:00.000Z",
+          },
+        },
+      })),
+      saveState,
+      clock: {
+        now: () => new Date("2026-05-23T15:00:00.000Z"),
+      },
+    });
+
+    expect(meetingSource.listMeetingChanges).toHaveBeenNthCalledWith(1, {
+      calendar: CONFIG.calendars[0],
+      window,
+      deltaLink: "delta-1",
+    });
+    expect(meetingSource.listMeetingChanges).toHaveBeenNthCalledWith(2, {
+      calendar: CONFIG.calendars[0],
+      window,
+    });
+    expect(result.updated).toBe(1);
+    expect(notion.setPageStatus).toHaveBeenCalledWith({
+      pageId: "page-canceled",
+      propertyName: "Status",
+      statusName: "Canceled",
+    });
+    expect(saveState).toHaveBeenCalledWith(CONFIG.sync.statePath, {
+      version: 1,
+      calendars: {
+        primary: {
+          lookahead: "today",
+          window,
+          deltaLink: "delta-2",
+          updatedAt: "2026-05-23T15:00:00.000Z",
+        },
+      },
+    });
+  });
+
   it("preserves the Notion client receiver when reconciling missing pages", async () => {
     const notion = {
       retrieveDataSource: vi.fn(async () => ({

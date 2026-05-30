@@ -51,17 +51,14 @@ export async function syncCalendarChangesToNotion(
   const existingState = await loadState(config.sync.statePath);
   const nextCalendars = { ...existingState.calendars };
   const meetingsByCalendar: Meeting[][] = [];
+  const currentWindowMeetingsByCalendar: Meeting[][] = [];
   let archived = 0;
   let updated = 0;
-  let usedOnlyFreshWindowDeltas = true;
+  const canReconcileMissingMeetings = canListMeetingPagesForWindow(notion);
 
   for (const calendar of config.calendars) {
     const saved = existingState.calendars[calendar.id];
     const deltaLink = canReuseDelta(saved, lookahead, window) ? saved.deltaLink : undefined;
-
-    if (deltaLink) {
-      usedOnlyFreshWindowDeltas = false;
-    }
 
     const result = await deps.meetingSource.listMeetingChanges({
       calendar,
@@ -105,15 +102,24 @@ export async function syncCalendarChangesToNotion(
     }
 
     meetingsByCalendar.push(result.meetings);
+    currentWindowMeetingsByCalendar.push(
+      deltaLink && canReconcileMissingMeetings
+        ? (await deps.meetingSource.listMeetingChanges({
+            calendar,
+            window,
+          })).meetings
+        : result.meetings,
+    );
   }
 
   const meetings = meetingsByCalendar
     .flat()
     .sort((left, right) => left.start.localeCompare(right.start) || left.title.localeCompare(right.title));
+  const currentWindowMeetings = currentWindowMeetingsByCalendar
+    .flat()
+    .sort((left, right) => left.start.localeCompare(right.start) || left.title.localeCompare(right.title));
   const syncResult = await syncMeetingsToNotion(config, meetings, notion, syncOptions);
-  const reconcileResult = usedOnlyFreshWindowDeltas
-    ? await reconcileMissingNotionMeetings(config, meetings, notion, window, syncOptions)
-    : { archived: 0, updated: 0 };
+  const reconcileResult = await reconcileMissingNotionMeetings(config, currentWindowMeetings, notion, window, syncOptions);
 
   if (!syncResult.dryRun) {
     await saveState(config.sync.statePath, {
@@ -127,6 +133,10 @@ export async function syncCalendarChangesToNotion(
     updated: syncResult.updated + updated + reconcileResult.updated,
     archived: syncResult.archived + archived + reconcileResult.archived,
   };
+}
+
+function canListMeetingPagesForWindow(notion: NotionClient): boolean {
+  return Boolean(notion.listMeetingPagePropertiesForWindow || notion.listMeetingPagesForWindow);
 }
 
 async function reconcileMissingNotionMeetings(

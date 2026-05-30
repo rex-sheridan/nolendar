@@ -48,21 +48,26 @@ To keep it available in new shells, add that line to `~/.zshrc`, or use an alias
 alias nolendar="$(pwd)/bin/nolendar"
 ```
 
-3. Generate a starter config:
+3. Run the setup wizard:
+
+```bash
+nolendar wizard
+```
+
+   The wizard writes progress to `nolendar.yml` as you go. It walks through Microsoft authentication, Outlook calendar selection, Notion data source selection, property mappings, and optional sections such as filters, templates, page content, and sync settings.
+
+   You can also run the same interactive flow through `init`:
+
+```bash
+nolendar init --wizard
+```
+
+   Before running the wizard, follow [AUTHENTICATION.md](AUTHENTICATION.md) to export the required `MICROSOFT_CLIENT_ID` and `NOTION_TOKEN` or `NOTION_API_KEY`.
+
+4. If you prefer to edit YAML manually, generate a starter config instead:
 
 ```bash
 nolendar init
-```
-
-4. Follow [AUTHENTICATION.md](AUTHENTICATION.md) to set up:
-   - Microsoft authentication
-   - your Notion token
-   - the target Notion data source ID
-
-   To discover Outlook calendar IDs after setting `MICROSOFT_CLIENT_ID`:
-
-```bash
-nolendar list-calendars
 ```
 
 5. Validate config:
@@ -289,6 +294,24 @@ notion:
 ## Commands
 
 ### Setup
+
+Run the interactive setup wizard:
+
+```bash
+npm run dev -- wizard
+```
+
+Run the wizard through `init`:
+
+```bash
+npm run dev -- init --wizard
+```
+
+Write wizard output to a custom path:
+
+```bash
+npm run dev -- wizard --config ./config/nolendar.yml
+```
 
 Generate a starter config:
 
