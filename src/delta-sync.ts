@@ -54,6 +54,7 @@ export async function syncCalendarChangesToNotion(
   const currentWindowMeetingsByCalendar: Meeting[][] = [];
   let archived = 0;
   let updated = 0;
+  let skipped = 0;
   const canReconcileMissingMeetings = canListMeetingPagesForWindow(notion);
 
   for (const calendar of config.calendars) {
@@ -75,6 +76,7 @@ export async function syncCalendarChangesToNotion(
       });
 
       if (!existing) {
+        skipped += 1;
         syncOptions.onDecision?.(`sync decision: removedEventId=${removedEventId} pageId=- decision=skip_removed_missing_page`);
         continue;
       }
@@ -132,6 +134,7 @@ export async function syncCalendarChangesToNotion(
     ...syncResult,
     updated: syncResult.updated + updated + reconcileResult.updated,
     archived: syncResult.archived + archived + reconcileResult.archived,
+    skipped: syncResult.skipped + skipped + reconcileResult.skipped,
   };
 }
 
@@ -145,9 +148,9 @@ async function reconcileMissingNotionMeetings(
   notion: NotionClient,
   window: CalendarWindow,
   syncOptions: SyncOptions,
-): Promise<{ archived: number; updated: number }> {
+): Promise<{ archived: number; updated: number; skipped: number }> {
   if (!notion.listMeetingPagePropertiesForWindow && !notion.listMeetingPagesForWindow) {
-    return { archived: 0, updated: 0 };
+    return { archived: 0, updated: 0, skipped: 0 };
   }
 
   const currentEventIds = new Set(meetings.map((meeting) => meeting.id));
@@ -162,6 +165,7 @@ async function reconcileMissingNotionMeetings(
     : await notion.listMeetingPagesForWindow?.(queryArgs);
   let archived = 0;
   let updated = 0;
+  let skipped = 0;
 
   for (const page of pages ?? []) {
     const eventId = readStringProperty(page.properties[config.mapping.eventId]);
@@ -171,6 +175,7 @@ async function reconcileMissingNotionMeetings(
     }
 
     if (!isPageDateWithinWindow(page.properties[config.mapping.due], window)) {
+      skipped += 1;
       syncOptions.onDecision?.(
         `sync decision: notionEventId=${eventId} pageId=${page.id} decision=skip_missing_outside_window`,
       );
@@ -183,6 +188,7 @@ async function reconcileMissingNotionMeetings(
       const currentStatus = readStringProperty(page.properties[action.statusProperty]);
 
       if (currentStatus === action.statusValue) {
+        skipped += 1;
         syncOptions.onDecision?.(
           `sync decision: notionEventId=${eventId} pageId=${page.id} decision=skip_missing_already_status property=${action.statusProperty} value=${action.statusValue}`,
         );
@@ -203,7 +209,7 @@ async function reconcileMissingNotionMeetings(
     }
   }
 
-  return { archived, updated };
+  return { archived, updated, skipped };
 }
 
 function readStringProperty(value: unknown): string | undefined {

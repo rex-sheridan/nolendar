@@ -392,6 +392,7 @@ describe("syncCalendarChangesToNotion", () => {
 
     expect(notion.archivePage).toHaveBeenCalledWith("page-removed");
     expect(result.archived).toBe(1);
+    expect(result.skipped).toBe(1);
   });
 
   it("sets the configured status for removed events when cancelled meetings use status mapping", async () => {
@@ -452,6 +453,7 @@ describe("syncCalendarChangesToNotion", () => {
 
     expect(result.updated).toBe(1);
     expect(result.archived).toBe(0);
+    expect(result.skipped).toBe(1);
     expect(notion.setPageStatus).toHaveBeenCalledWith({
       pageId: "page-removed",
       propertyName: "Status",
@@ -782,6 +784,7 @@ describe("syncCalendarChangesToNotion", () => {
     });
 
     expect(result.updated).toBe(0);
+    expect(result.skipped).toBe(1);
     expect(notion.setPageStatus).not.toHaveBeenCalled();
     expect(decisions).toContain(
       "sync decision: notionEventId=evt-yesterday pageId=page-yesterday decision=skip_missing_outside_window",
