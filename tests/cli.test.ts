@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createCli, runCli } from "../src/cli.js";
 import type { NolendarConfig } from "../src/domain/config.js";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("cli", () => {
   it("registers the expected commands", () => {
@@ -91,6 +95,9 @@ describe("cli", () => {
   it("returns a non-zero exit code when auth configuration is incomplete", async () => {
     const stdout = { log: vi.fn() };
     const stderr = { error: vi.fn() };
+    vi.stubEnv("MICROSOFT_CLIENT_ID", undefined);
+    vi.stubEnv("MICROSOFT_CLIENT_SECRET", undefined);
+    vi.stubEnv("MICROSOFT_ACCESS_TOKEN", undefined);
 
     const exitCode = await runCli(
       ["node", "nolendar", "list", "--config", "tests/fixtures/auth-code-config.yml"],

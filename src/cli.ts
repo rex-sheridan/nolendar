@@ -4,6 +4,7 @@ import { createConsoleTimingReporter, type ApiTimingReporter } from "./api-timin
 import { loadConfig } from "./config.js";
 import { ReadlineConfigWizardPrompt, runConfigWizard, type ConfigWizardPrompt } from "./config-wizard.js";
 import type { MicrosoftAuthMode, MicrosoftConfig, NolendarConfig } from "./domain/config.js";
+import { loadLocalEnvFile } from "./env.js";
 import { resolveGraphAuthConfig } from "./graph/auth.js";
 import { AuthorizationCodeTokenProvider } from "./graph/authorization-code-token-provider.js";
 import { DeviceCodeTokenProvider } from "./graph/device-code-token-provider.js";
@@ -356,9 +357,9 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
 }
 
 export async function runCli(argv = process.argv, deps?: CliDependencies): Promise<number> {
-  const cli = createCli(deps);
-
   try {
+    await loadLocalEnvFile();
+    const cli = createCli(deps);
     await cli.parseAsync(argv);
     return 0;
   } catch (error) {

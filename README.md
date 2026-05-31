@@ -62,7 +62,7 @@ nolendar wizard
 nolendar init --wizard
 ```
 
-   Before running the wizard, follow [AUTHENTICATION.md](AUTHENTICATION.md) to export the required `MICROSOFT_CLIENT_ID` and `NOTION_TOKEN` or `NOTION_API_KEY`.
+   Before running the wizard, follow [AUTHENTICATION.md](AUTHENTICATION.md) to provide the required `MICROSOFT_CLIENT_ID` and `NOTION_TOKEN` or `NOTION_API_KEY`.
 
 4. If you prefer to edit YAML manually, generate a starter config instead:
 
@@ -105,6 +105,14 @@ Detailed auth and credential setup lives in [AUTHENTICATION.md](/Users/rex/works
 ## Configuration
 
 Nolendar reads YAML config. By default, commands look for `nolendar.yml` in the current directory.
+
+Nolendar also loads a local `.env` file from the current working directory before each CLI command. The file is ignored by git, so it is a good place for local credentials:
+
+```bash
+cp .env.example .env
+```
+
+Shell-exported variables take precedence over values in `.env`.
 
 Example:
 

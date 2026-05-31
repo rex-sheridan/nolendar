@@ -57,6 +57,14 @@ If `MICROSOFT_GRAPH_SCOPES` is not set, Nolendar uses:
 - `Calendars.Read`
 - `User.Read`
 
+For local development, you can put these same assignments in a `.env` file in the project directory instead of exporting them every shell session:
+
+```bash
+cp .env.example .env
+```
+
+Nolendar loads `.env` before running CLI commands. Existing shell environment variables win over `.env` values. The real `.env` file is ignored by git; keep only `.env.example` checked in.
+
 ## Microsoft Authentication Modes
 
 ### Option 1: `device_code`

@@ -2,4 +2,7 @@ node_modules
 dist
 .nolendar
 coverage
+.env
+.env.*
+!.env.example
 nolendar*.yml
