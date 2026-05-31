@@ -1,3 +1,5 @@
+import { access } from "node:fs/promises";
+
 import { Command } from "commander";
 
 import { createConsoleTimingReporter, type ApiTimingReporter } from "./api-timing.js";
@@ -437,12 +439,28 @@ async function resolveMicrosoftConfig(
   options: { config?: string; tenant?: string; authMode?: string },
   loadConfigFn: typeof loadConfig,
 ): Promise<MicrosoftConfig> {
-  const baseConfig = options.config ? (await loadConfigFn(options.config)).microsoft : defaultMicrosoftConfig();
+  const configPath = options.config ?? (await optionalDefaultConfigPath());
+  const baseConfig = configPath ? (await loadConfigFn(configPath)).microsoft : defaultMicrosoftConfig();
 
   return {
     tenant: resolveMicrosoftTenant(options.tenant, baseConfig.tenant),
     authMode: resolveMicrosoftAuthMode(options.authMode, baseConfig.authMode),
   };
+}
+
+async function optionalDefaultConfigPath(): Promise<string | undefined> {
+  const configPath = "nolendar.yml";
+
+  try {
+    await access(configPath);
+    return configPath;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+
+    throw error;
+  }
 }
 
 function defaultMicrosoftConfig(): MicrosoftConfig {
