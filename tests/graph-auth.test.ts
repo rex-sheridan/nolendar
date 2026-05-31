@@ -127,6 +127,33 @@ describe("resolveGraphAuthConfig", () => {
     });
   });
 
+  it("uses a custom Microsoft token cache path when provided", () => {
+    expect(
+      resolveGraphAuthConfig(
+        {
+          ...CONFIG,
+          microsoft: {
+            tenant: "organizations",
+            authMode: "auth_code",
+          },
+        },
+        {
+          MICROSOFT_CLIENT_ID: "client-id",
+          MICROSOFT_CLIENT_SECRET: "client-secret",
+          MICROSOFT_TOKEN_CACHE_PATH: "/tmp/nolendar-msal-cache.json",
+        },
+      ),
+    ).toEqual({
+      mode: "auth_code",
+      tenantId: "organizations",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      redirectUri: "http://localhost:8787/auth/callback",
+      scopes: DEFAULT_GRAPH_SCOPES,
+      tokenCachePath: "/tmp/nolendar-msal-cache.json",
+    });
+  });
+
   it("requires a client id for interactive browser mode", () => {
     expect(() =>
       resolveGraphAuthConfig(

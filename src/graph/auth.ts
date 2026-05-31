@@ -6,6 +6,7 @@ export interface GraphAuthBaseConfig {
   tenantId: string;
   scopes: string[];
   clientId?: string;
+  tokenCachePath?: string;
 }
 
 export interface GraphDeviceCodeAuthConfig extends GraphAuthBaseConfig {
@@ -77,6 +78,7 @@ export function resolveGraphAuthConfig(
       clientSecret,
       redirectUri: env.MICROSOFT_REDIRECT_URI ?? "http://localhost:8787/auth/callback",
       scopes: parseScopes(env.MICROSOFT_GRAPH_SCOPES),
+      ...optionalTokenCachePath(env),
     };
   }
 
@@ -91,6 +93,7 @@ export function resolveGraphAuthConfig(
     tenantId: config.microsoft.tenant,
     clientId,
     scopes: parseScopes(env.MICROSOFT_GRAPH_SCOPES),
+    ...optionalTokenCachePath(env),
   };
 }
 
@@ -109,4 +112,9 @@ function parseScopes(rawScopes?: string): string[] {
   }
 
   return scopes;
+}
+
+function optionalTokenCachePath(env: NodeJS.ProcessEnv): { tokenCachePath?: string } {
+  const tokenCachePath = env.MICROSOFT_TOKEN_CACHE_PATH?.trim();
+  return tokenCachePath ? { tokenCachePath } : {};
 }

@@ -133,7 +133,8 @@ export MICROSOFT_GRAPH_SCOPES=Calendars.Read,User.Read
 Notes:
 
 - `MICROSOFT_REDIRECT_URI` must exactly match the app registration
-- Nolendar opens a browser and waits for the localhost callback
+- Nolendar opens a browser and waits for the localhost callback the first time, then reuses the persisted MSAL token cache for later runs while the cached refresh token remains valid
+- the default token cache path is `~/.nolendar/msal-cache.json`; set `MICROSOFT_TOKEN_CACHE_PATH` to use a different file
 
 ### Option 3: `interactive_browser`
 
@@ -158,6 +159,7 @@ Notes:
 
 - the app registration must be usable as a public client
 - Nolendar opens a browser for sign-in
+- persistent token caching is currently implemented for `auth_code`; use `auth_code` if you want later runs to avoid opening a browser
 
 ### Option 4: `MICROSOFT_ACCESS_TOKEN` override
 

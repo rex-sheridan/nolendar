@@ -3,10 +3,11 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import { promisify } from "node:util";
 
-import { ConfidentialClientApplication, CryptoProvider } from "@azure/msal-node";
+import { ConfidentialClientApplication, CryptoProvider, type AccountInfo } from "@azure/msal-node";
 
 import type { GraphAuthorizationCodeAuthConfig } from "./auth.js";
 import type { AccessTokenProvider } from "./device-code-token-provider.js";
+import { FileTokenCachePlugin } from "./file-token-cache-plugin.js";
 
 const execFileAsync = promisify(execFile);
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
@@ -31,6 +32,16 @@ interface AuthorizationCodeApp {
     accessToken?: string;
     expiresOn?: Date | null;
   } | null>;
+  acquireTokenSilent?(args: {
+    account: AccountInfo;
+    scopes: string[];
+  }): Promise<{
+    accessToken?: string;
+    expiresOn?: Date | null;
+  } | null>;
+  getTokenCache?(): {
+    getAllAccounts(): Promise<AccountInfo[]>;
+  };
 }
 
 interface CachedToken {
@@ -61,6 +72,9 @@ export class AuthorizationCodeTokenProvider implements AccessTokenProvider {
           clientSecret: config.clientSecret,
           authority: `https://login.microsoftonline.com/${config.tenantId}`,
         },
+        cache: {
+          cachePlugin: new FileTokenCachePlugin(config.tokenCachePath),
+        },
       });
     this.authorize = options.authorize ?? getAuthorizationCode;
     this.now = options.now ?? Date.now;
@@ -84,6 +98,12 @@ export class AuthorizationCodeTokenProvider implements AccessTokenProvider {
   }
 
   private async acquireAccessToken(): Promise<CachedToken> {
+    const silentToken = await this.acquireSilentAccessToken();
+
+    if (silentToken) {
+      return silentToken;
+    }
+
     const { code, codeVerifier } = await this.authorize(this.app, this.config, this.promptTarget);
     const token = await this.app.acquireTokenByCode({
       code,
@@ -100,6 +120,37 @@ export class AuthorizationCodeTokenProvider implements AccessTokenProvider {
       accessToken: token.accessToken,
       expiresOnTimestamp: token.expiresOn?.getTime() ?? Number.MAX_SAFE_INTEGER,
     };
+  }
+
+  private async acquireSilentAccessToken(): Promise<CachedToken | null> {
+    if (!this.app.acquireTokenSilent || !this.app.getTokenCache) {
+      return null;
+    }
+
+    const accounts = await this.app.getTokenCache().getAllAccounts();
+    const account = accounts[0];
+
+    if (!account) {
+      return null;
+    }
+
+    try {
+      const token = await this.app.acquireTokenSilent({
+        account,
+        scopes: this.config.scopes,
+      });
+
+      if (!token?.accessToken) {
+        return null;
+      }
+
+      return {
+        accessToken: token.accessToken,
+        expiresOnTimestamp: token.expiresOn?.getTime() ?? Number.MAX_SAFE_INTEGER,
+      };
+    } catch {
+      return null;
+    }
   }
 }
 

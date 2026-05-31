@@ -74,4 +74,44 @@ describe("AuthorizationCodeTokenProvider", () => {
     expect(authorize).toHaveBeenCalledTimes(1);
     expect(app.acquireTokenByCode).toHaveBeenCalledTimes(1);
   });
+
+  it("uses a persisted MSAL account silently before opening a browser", async () => {
+    const authorize = vi.fn(async () => ({
+      code: "code-1",
+      codeVerifier: "verifier-1",
+    }));
+    const app = {
+      getAuthCodeUrl: vi.fn(),
+      acquireTokenByCode: vi.fn(),
+      acquireTokenSilent: vi.fn(async () => ({
+        accessToken: "silent-token",
+        expiresOn: new Date(Date.parse("2026-05-27T21:00:00.000Z")),
+      })),
+      getTokenCache: vi.fn(() => ({
+        getAllAccounts: vi.fn(async () => [
+          {
+            homeAccountId: "home-account-id",
+            environment: "login.microsoftonline.com",
+            tenantId: "organizations",
+            username: "rex@example.com",
+            localAccountId: "local-account-id",
+          },
+        ]),
+      })),
+    };
+    const provider = new AuthorizationCodeTokenProvider(CONFIG, { log: vi.fn() }, {
+      app,
+      authorize,
+      now: () => Date.parse("2026-05-27T20:00:00.000Z"),
+    });
+
+    await expect(provider.getAccessToken()).resolves.toBe("silent-token");
+
+    expect(authorize).not.toHaveBeenCalled();
+    expect(app.acquireTokenByCode).not.toHaveBeenCalled();
+    expect(app.acquireTokenSilent).toHaveBeenCalledWith({
+      account: expect.objectContaining({ homeAccountId: "home-account-id" }),
+      scopes: CONFIG.scopes,
+    });
+  });
 });
