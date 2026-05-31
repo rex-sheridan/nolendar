@@ -465,6 +465,12 @@ Show both Microsoft Graph and Notion timings during sync:
 npm run dev -- sync --config nolendar.yml --force-update --timings
 ```
 
+Shorten long IDs in timing and verbose sync logs:
+
+```bash
+npm run dev -- sync --config nolendar.yml --timings --verbose --compact-ids
+```
+
 Build and run the compiled CLI:
 
 ```bash
@@ -505,6 +511,7 @@ The current sync implementation:
 
 - `--timings` prints one line per outbound Microsoft Graph or Notion API call
 - each line includes the service, operation, status, and elapsed duration in milliseconds
+- add `--compact-ids` to shorten long IDs as `first...last` in timing output and verbose sync decisions
 - the final `sync` summary includes end-to-end elapsed time
 
 ### Current Limitations

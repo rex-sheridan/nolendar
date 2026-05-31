@@ -1,3 +1,5 @@
+import { compactLogIds, type LogCompactionOptions } from "./log-compaction.js";
+
 export interface ApiTimingEntry {
   service: "graph" | "notion";
   operation: string;
@@ -13,13 +15,15 @@ export interface ApiTimingReporter {
 
 export function createConsoleTimingReporter(
   sink: Pick<Console, "log">,
+  options: LogCompactionOptions = {},
 ): ApiTimingReporter {
   return {
     record(entry) {
       const status = entry.status ? ` ${entry.status}` : "";
-      const detail = entry.detail ? ` ${entry.detail}` : "";
+      const operation = compactLogIds(entry.operation, options);
+      const detail = entry.detail ? ` ${compactLogIds(entry.detail, options)}` : "";
       const count = entry.count === undefined ? "" : ` count=${entry.count}`;
-      sink.log(`[timings] ${entry.service} ${entry.operation}${detail}${status}${count} ${entry.durationMs}ms`);
+      sink.log(`[timings] ${entry.service} ${operation}${detail}${status}${count} ${entry.durationMs}ms`);
     },
   };
 }

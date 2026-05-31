@@ -23,6 +23,7 @@ import { validateNotionSchema } from "./notion/schema.js";
 import { validateOrEnsureNotionSchema } from "./notion/validation.js";
 import { syncCalendarChangesToNotion } from "./delta-sync.js";
 import { listMeetingContentsForDay, type MeetingContentsDetail, type MeetingContentsSource } from "./meeting-contents.js";
+import { compactLogIds } from "./log-compaction.js";
 
 export interface CliDependencies {
   stdout: Pick<Console, "log">;
@@ -49,9 +50,10 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--tenant <tenant>", "Microsoft tenant: common, organizations, or consumers")
     .option("--auth-mode <mode>", "Microsoft auth mode: device_code, interactive_browser, or auth_code")
     .option("--timings", "Print API call timings", false)
-    .action(async (options: { config?: string; tenant?: string; authMode?: string; timings: boolean }) => {
+    .option("--compact-ids", "Shorten long IDs in timing and verbose log output", false)
+    .action(async (options: { config?: string; tenant?: string; authMode?: string; timings: boolean; compactIds: boolean }) => {
       const microsoft = await resolveMicrosoftConfig(options, loadConfigFn);
-      const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+      const timingReporter = options.timings ? createTimingReporter(deps, { compactIds: options.compactIds }) : undefined;
       const graph = buildGraphMeetingSourceFromMicrosoftConfig(microsoft, deps, timingReporter);
       const calendars = await graph.listCalendars();
 
@@ -72,10 +74,11 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .option("--lookahead <window>", "One of: today, 24h, 7d")
     .option("--timings", "Print API call timings", false)
-    .action(async (options: { config: string; lookahead?: string; timings: boolean }) => {
+    .option("--compact-ids", "Shorten long IDs in timing log output", false)
+    .action(async (options: { config: string; lookahead?: string; timings: boolean; compactIds: boolean }) => {
       const config = await loadConfigFn(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
-      const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+      const timingReporter = options.timings ? createTimingReporter(deps, { compactIds: options.compactIds }) : undefined;
       const meetingSource = buildGraphMeetingSource(config, deps, timingReporter);
       const result = await listMeetings(config, lookahead, { meetingSource });
 
@@ -103,6 +106,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--day <day>", "Day to inspect: today, tomorrow, yesterday, +/-Nd, or YYYY-MM-DD", "today")
     .option("--full-properties", "Print all available normalized properties in addition to title/date/body", false)
     .option("--timings", "Print API call timings", false)
+    .option("--compact-ids", "Shorten long IDs in timing log output", false)
     .action(
       async (options: {
         config: string;
@@ -110,11 +114,12 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         day: string;
         fullProperties: boolean;
         timings: boolean;
+        compactIds: boolean;
       }) => {
         const config = await loadConfigFn(options.config);
         const source = resolveMeetingContentsSource(options.source);
         const detail: MeetingContentsDetail = options.fullProperties ? "full" : "compact";
-        const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+        const timingReporter = options.timings ? createTimingReporter(deps, { compactIds: options.compactIds }) : undefined;
         const output = await listMeetingContentsForDay(
           config,
           {
@@ -154,10 +159,11 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .option("--ensure-properties", "Create missing required properties if possible", false)
     .option("--timings", "Print API call timings", false)
-    .action(async (options: { config: string; ensureProperties: boolean; timings: boolean }) => {
+    .option("--compact-ids", "Shorten long IDs in timing log output", false)
+    .action(async (options: { config: string; ensureProperties: boolean; timings: boolean; compactIds: boolean }) => {
       const config = await loadConfigFn(options.config);
       const notion = buildNotionClientFn({
-        timingReporter: options.timings ? createTimingReporter(deps) : undefined,
+        timingReporter: options.timings ? createTimingReporter(deps, { compactIds: options.compactIds }) : undefined,
       });
 
       await validateOrEnsureNotionSchema(config, notion, {
@@ -178,10 +184,11 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .description("Print the detected Notion schema for the configured meeting and People data sources.")
     .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
     .option("--timings", "Print API call timings", false)
-    .action(async (options: { config: string; timings: boolean }) => {
+    .option("--compact-ids", "Shorten long IDs in timing log output", false)
+    .action(async (options: { config: string; timings: boolean; compactIds: boolean }) => {
       const config = await loadConfigFn(options.config);
       const notion = buildNotionClientFn({
-        timingReporter: options.timings ? createTimingReporter(deps) : undefined,
+        timingReporter: options.timings ? createTimingReporter(deps, { compactIds: options.compactIds }) : undefined,
       });
 
       const meetingSchema = await notion.retrieveDataSource(config.notion.databaseId);
@@ -208,6 +215,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--finalize-delay-ms <ms>", "Delay in milliseconds before the native-template finalize pass", "3000")
     .option("--timings", "Print API call timings", false)
     .option("--verbose", "Print per-meeting sync decisions", false)
+    .option("--compact-ids", "Shorten long IDs in timing and verbose log output", false)
     .action(
       async (options: {
         config: string;
@@ -218,12 +226,14 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         finalizeDelayMs: string;
         timings: boolean;
         verbose: boolean;
+        compactIds: boolean;
       }) => {
       const startedAt = Date.now();
       const config = await loadConfigFn(options.config);
       const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
       const finalizeDelayMs = parseDelayMs(options.finalizeDelayMs);
-      const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+      const logOptions = { compactIds: options.compactIds };
+      const timingReporter = options.timings ? createTimingReporter(deps, logOptions) : undefined;
       const meetingSource = buildGraphMeetingSource(config, deps, timingReporter);
       const notion = buildNotionClientFn({
         timingReporter,
@@ -243,7 +253,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
             dryRun: options.dryRun,
             ensureProperties: options.ensureProperties,
             forceUpdate: options.forceUpdate,
-            onDecision: options.verbose ? (message) => deps.stdout.log(message) : undefined,
+            onDecision: options.verbose ? (message) => deps.stdout.log(compactLogIds(message, logOptions)) : undefined,
           },
         },
       );
@@ -269,16 +279,18 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--lookahead <window>", "One of: today, 24h, 7d")
     .option("--ensure-properties", "Create missing required properties if possible", false)
     .option("--timings", "Print API call timings", false)
+    .option("--compact-ids", "Shorten long IDs in timing log output", false)
     .action(
       async (options: {
         config: string;
         lookahead?: string;
         ensureProperties: boolean;
         timings: boolean;
+        compactIds: boolean;
       }) => {
         const config = await loadConfigFn(options.config);
         const lookahead = resolveLookahead(config.sync.lookahead, options.lookahead);
-        const timingReporter = options.timings ? createTimingReporter(deps) : undefined;
+        const timingReporter = options.timings ? createTimingReporter(deps, { compactIds: options.compactIds }) : undefined;
         const meetingSource = buildGraphMeetingSource(config, deps, timingReporter);
         const notion = buildNotionClientFn({
           timingReporter,
@@ -406,8 +418,8 @@ function formatSchemaOutput(
   return lines;
 }
 
-function createTimingReporter(deps: CliDependencies): ApiTimingReporter {
-  return createConsoleTimingReporter(deps.timingSink ?? deps.stdout);
+function createTimingReporter(deps: CliDependencies, options: { compactIds?: boolean } = {}): ApiTimingReporter {
+  return createConsoleTimingReporter(deps.timingSink ?? deps.stdout, options);
 }
 
 function parseDelayMs(value: string): number {
