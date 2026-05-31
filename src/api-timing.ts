@@ -4,6 +4,7 @@ export interface ApiTimingEntry {
   detail?: string;
   durationMs: number;
   status?: string;
+  count?: number;
 }
 
 export interface ApiTimingReporter {
@@ -17,7 +18,8 @@ export function createConsoleTimingReporter(
     record(entry) {
       const status = entry.status ? ` ${entry.status}` : "";
       const detail = entry.detail ? ` ${entry.detail}` : "";
-      sink.log(`[timings] ${entry.service} ${entry.operation}${detail}${status} ${entry.durationMs}ms`);
+      const count = entry.count === undefined ? "" : ` count=${entry.count}`;
+      sink.log(`[timings] ${entry.service} ${entry.operation}${detail}${status}${count} ${entry.durationMs}ms`);
     },
   };
 }

@@ -319,6 +319,7 @@ describe("GraphMeetingSource", () => {
         service: "graph",
         operation: expect.stringContaining("GET /v1.0/me?"),
         status: "200",
+        count: undefined,
       }),
     );
     expect(timingReporter.record).toHaveBeenNthCalledWith(
@@ -327,6 +328,7 @@ describe("GraphMeetingSource", () => {
         service: "graph",
         operation: expect.stringContaining("/calendarView"),
         status: "200",
+        count: 1,
       }),
     );
   });

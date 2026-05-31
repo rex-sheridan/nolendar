@@ -1304,18 +1304,25 @@ describe("ApiNotionClient.listMeetingPagesForWindow", () => {
         })),
       },
     };
-    const client = new ApiNotionClient("token", {
-      blocks,
-      dataSources,
-      pages: {
-        create: vi.fn(),
-        update: vi.fn(),
+    const timingReporter = {
+      record: vi.fn(),
+    };
+    const client = new ApiNotionClient(
+      "token",
+      {
+        blocks,
+        dataSources,
+        pages: {
+          create: vi.fn(),
+          update: vi.fn(),
+        },
+        users: {
+          me: vi.fn(),
+          list: vi.fn(),
+        },
       },
-      users: {
-        me: vi.fn(),
-        list: vi.fn(),
-      },
-    });
+      timingReporter,
+    );
 
     await expect(
       client.listMeetingPagePropertiesForWindow({
@@ -1335,5 +1342,12 @@ describe("ApiNotionClient.listMeetingPagesForWindow", () => {
       },
     ]);
     expect(blocks.children.list).not.toHaveBeenCalled();
+    expect(timingReporter.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: "notion",
+        operation: "dataSources.query",
+        count: 1,
+      }),
+    );
   });
 });

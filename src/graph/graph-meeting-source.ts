@@ -221,24 +221,39 @@ async function fetchGraphObject<T>(
         Prefer: preferHeaders.join(", "),
       },
     });
-    timingReporter?.record({
-      service: "graph",
-      operation: `GET ${url.pathname}${url.search}`,
-      status: String(response.status),
-      durationMs: Date.now() - startedAt,
-    });
-
     if (response.ok) {
-      return (await response.json()) as T;
+      const payload = (await response.json()) as T;
+      const count = getGraphResultCount(payload);
+
+      timingReporter?.record({
+        service: "graph",
+        operation: `GET ${url.pathname}${url.search}`,
+        status: String(response.status),
+        count,
+        durationMs: Date.now() - startedAt,
+      });
+      return payload;
     }
 
     if (response.status === 429 && attempt < MAX_THROTTLE_RETRIES) {
+      timingReporter?.record({
+        service: "graph",
+        operation: `GET ${url.pathname}${url.search}`,
+        status: String(response.status),
+        durationMs: Date.now() - startedAt,
+      });
       const retryAfterMs = getRetryDelayMs(response, attempt);
       await sleep(retryAfterMs);
       continue;
     }
 
     const body = await response.text();
+    timingReporter?.record({
+      service: "graph",
+      operation: `GET ${url.pathname}${url.search}`,
+      status: String(response.status),
+      durationMs: Date.now() - startedAt,
+    });
     throw new Error(`Graph request failed with ${response.status}: ${body}`);
   }
 
@@ -323,6 +338,15 @@ async function fetchCurrentUserEmail(
   );
   const email = response.mail?.trim() || response.userPrincipalName?.trim();
   return email ? email.toLowerCase() : undefined;
+}
+
+function getGraphResultCount(payload: unknown): number | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return undefined;
+  }
+
+  const value = (payload as { value?: unknown }).value;
+  return Array.isArray(value) ? value.length : undefined;
 }
 
 function graphEventSelect(): string {

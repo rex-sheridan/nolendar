@@ -835,6 +835,7 @@ export class ApiNotionClient implements NotionClient {
         operation,
         detail,
         status: "ok",
+        count: getNotionResultCount(result),
         durationMs: Date.now() - startedAt,
       });
       return result;
@@ -849,6 +850,20 @@ export class ApiNotionClient implements NotionClient {
       throw error;
     }
   }
+}
+
+function getNotionResultCount(result: unknown): number | undefined {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    return undefined;
+  }
+
+  const results = (result as { results?: unknown }).results;
+
+  if (Array.isArray(results)) {
+    return results.length;
+  }
+
+  return undefined;
 }
 
 function describeCreateMeetingPage(
