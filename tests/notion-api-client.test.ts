@@ -216,6 +216,40 @@ describe("ApiNotionClient.setPageStatus", () => {
   });
 });
 
+describe("ApiNotionClient.archivePage", () => {
+  it("moves a Notion page to trash", async () => {
+    const pages = {
+      create: vi.fn(),
+      update: vi.fn(async () => undefined),
+    };
+    const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append: vi.fn(async () => undefined),
+          list: vi.fn(),
+        },
+      },
+      dataSources: {
+        retrieve: vi.fn(),
+        update: vi.fn(),
+        query: vi.fn(),
+      },
+      pages,
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.archivePage("page-1");
+
+    expect(pages.update).toHaveBeenCalledWith({
+      page_id: "page-1",
+      in_trash: true,
+    });
+  });
+});
+
 describe("ApiNotionClient page icon writes", () => {
   it("records timing entries for Notion API calls when a reporter is configured", async () => {
     const timingReporter = {

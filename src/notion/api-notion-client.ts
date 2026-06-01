@@ -431,10 +431,10 @@ export class ApiNotionClient implements NotionClient {
   }
 
   async archivePage(pageId: string): Promise<void> {
-    await this.timed("pages.update", `page_id=${pageId} archived=true`, () =>
+    await this.timed("pages.update", `page_id=${pageId} in_trash=true`, () =>
       this.client.pages.update({
         page_id: pageId,
-        archived: true,
+        in_trash: true,
       }),
     );
   }
