@@ -25,6 +25,11 @@ notion:
     action: set_status
     statusProperty: Status
     statusValue: Canceled
+  completedMeetings:
+    statusProperty: Status
+    doneStatusValue: Done
+    canceledStatusValue: Canceled
+    lookback: 1d
   defaultTags:
     - meeting
   defaultAssigneeEmail: you@example.com

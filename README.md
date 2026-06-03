@@ -138,6 +138,11 @@ notion:
     action: set_status
     statusProperty: Status
     statusValue: Canceled
+  completedMeetings:
+    statusProperty: Status
+    doneStatusValue: Done
+    canceledStatusValue: Canceled
+    lookback: 1d
   defaultTags:
     - meeting
   defaultAssigneeEmail: you@example.com
@@ -196,6 +201,7 @@ sync:
 - `filters.ignorePatterns` skips events whose title matches one of the configured JavaScript regular expressions
 - `notion.peopleDataSource.maxAttendeesPerMeeting` defaults to `10`; set it lower to reduce Notion People lookups for large meetings, or `0` to skip participant relation association while still creating meeting pages
 - `notion.canceledMeetings.action` defaults to `archive`; set it to `set_status` with `statusProperty` and `statusValue` to mark matching pages, for example `Status: Canceled`
+- `notion.completedMeetings` marks synced Notion entries whose meeting date has passed as done; when canceled meetings use `set_status`, it defaults to the same status property, `Done`, the configured canceled status value, and a `1d` lookback before the active sync window
 
 ## Notion Setup
 
@@ -212,6 +218,7 @@ Nolendar validates these properties on the target meeting data source:
 - people property mapped by `mapping.assignee`, if configured
 - relation property mapped by `mapping.participants`, if configured
 - status property mapped by `notion.canceledMeetings.statusProperty`, if `notion.canceledMeetings.action` is `set_status`
+- status property mapped by `notion.completedMeetings.statusProperty`, if `notion.completedMeetings` is configured
 
 If `notion.peopleDataSource` is configured, Nolendar also validates that data source for:
 
@@ -505,6 +512,7 @@ The current sync implementation:
 - sets the configured status value on matching Notion pages for cancelled meetings when `notion.canceledMeetings.action` is `set_status`
 - skips creating new pages for cancelled meetings
 - archives matching Notion pages when Graph delta reports deleted events, or sets the configured status when `notion.canceledMeetings.action` is `set_status`
+- sets the configured done status on synced Notion meeting pages whose meeting date has passed, unless they are already done or canceled
 - collapses multiple delta changes for the same recurring occurrence to the latest final state before sync
 - persists delta state only after a successful non-dry-run sync
 

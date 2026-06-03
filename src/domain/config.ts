@@ -1,6 +1,7 @@
 export type MicrosoftAuthMode = "device_code" | "interactive_browser" | "auth_code";
 
-export type LookaheadWindow = "today" | `${number}${"h" | "d" | "w" | "m"}`;
+export type RelativeWindow = `${number}${"h" | "d" | "w" | "m"}`;
+export type LookaheadWindow = "today" | RelativeWindow;
 
 export interface MicrosoftConfig {
   tenant: "common" | "organizations" | "consumers";
@@ -17,6 +18,7 @@ export interface NotionConfig {
   pageIcon?: NotionPageIconConfig;
   peopleDataSource?: NotionPeopleDataSourceConfig;
   canceledMeetings?: NotionCanceledMeetingsConfig;
+  completedMeetings?: NotionCompletedMeetingsConfig;
 }
 
 export type NotionCanceledMeetingsConfig =
@@ -28,6 +30,13 @@ export type NotionCanceledMeetingsConfig =
       statusProperty: string;
       statusValue: string;
     };
+
+export interface NotionCompletedMeetingsConfig {
+  statusProperty: string;
+  doneStatusValue: string;
+  canceledStatusValue: string;
+  lookback: RelativeWindow;
+}
 
 export interface NotionDataSourceTemplateConfig {
   type: "default" | "template_id";

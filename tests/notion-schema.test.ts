@@ -74,6 +74,45 @@ describe("buildRequiredNotionProperties", () => {
       }),
     ).toContainEqual({ name: "Status", type: "status" });
   });
+
+  it("requires a status property when completed meetings are mapped to status", () => {
+    expect(
+      buildRequiredNotionProperties({
+        ...CONFIG,
+        notion: {
+          ...CONFIG.notion,
+          completedMeetings: {
+            statusProperty: "Status",
+            doneStatusValue: "Done",
+            canceledStatusValue: "Canceled",
+            lookback: "1d",
+          },
+        },
+      }),
+    ).toContainEqual({ name: "Status", type: "status" });
+  });
+
+  it("does not duplicate a shared canceled and completed status property", () => {
+    const properties = buildRequiredNotionProperties({
+      ...CONFIG,
+      notion: {
+        ...CONFIG.notion,
+        canceledMeetings: {
+          action: "set_status",
+          statusProperty: "Status",
+          statusValue: "Canceled",
+        },
+        completedMeetings: {
+          statusProperty: "Status",
+          doneStatusValue: "Done",
+          canceledStatusValue: "Canceled",
+          lookback: "1d",
+        },
+      },
+    });
+
+    expect(properties.filter((property) => property.name === "Status")).toHaveLength(1);
+  });
 });
 
 describe("validateNotionSchema", () => {

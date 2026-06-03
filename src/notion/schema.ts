@@ -65,13 +65,26 @@ export function buildRequiredNotionProperties(config: NolendarConfig): RequiredN
   const canceledMeetings = config.notion.canceledMeetings ?? { action: "archive" };
 
   if (canceledMeetings.action === "set_status") {
-    required.push({
+    pushRequiredProperty(required, {
       name: canceledMeetings.statusProperty,
       type: "status",
     });
   }
 
+  if (config.notion.completedMeetings) {
+    pushRequiredProperty(required, {
+      name: config.notion.completedMeetings.statusProperty,
+      type: "status",
+    });
+  }
+
   return required;
+}
+
+function pushRequiredProperty(required: RequiredNotionProperty[], property: RequiredNotionProperty): void {
+  if (!required.some((existing) => existing.name === property.name)) {
+    required.push(property);
+  }
 }
 
 export function buildRequiredPeopleDataSourceProperties(config: NolendarConfig): RequiredNotionProperty[] {

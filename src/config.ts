@@ -12,6 +12,7 @@ import type {
   NolendarConfig,
   NotionConfig,
   NotionPageContentSection,
+  RelativeWindow,
 } from "./domain/config.js";
 
 export class ConfigError extends Error {
@@ -106,6 +107,7 @@ function normalizeNotion(value: unknown): NotionConfig {
   const pageIcon = normalizeNotionPageIcon(record.pageIcon);
   const peopleDataSource = normalizePeopleDataSource(record.peopleDataSource);
   const canceledMeetings = normalizeCanceledMeetings(record.canceledMeetings);
+  const completedMeetings = normalizeCompletedMeetings(record.completedMeetings, canceledMeetings);
 
   return {
     databaseId,
@@ -117,6 +119,7 @@ function normalizeNotion(value: unknown): NotionConfig {
     pageIcon,
     peopleDataSource,
     canceledMeetings,
+    completedMeetings,
   };
 }
 
@@ -396,6 +399,56 @@ function normalizeCanceledMeetings(value: unknown): NotionConfig["canceledMeetin
   }
 
   throw new ConfigError("`notion.canceledMeetings.action` must be one of: archive, set_status.");
+}
+
+function normalizeCompletedMeetings(
+  value: unknown,
+  canceledMeetings: NotionConfig["canceledMeetings"],
+): NotionConfig["completedMeetings"] {
+  if (value === undefined) {
+    return canceledMeetings?.action === "set_status"
+      ? {
+          statusProperty: canceledMeetings.statusProperty,
+          doneStatusValue: "Done",
+          canceledStatusValue: canceledMeetings.statusValue,
+          lookback: "1d",
+        }
+      : undefined;
+  }
+
+  const record = asRecord(value, "`notion.completedMeetings` must be an object.");
+
+  return {
+    statusProperty: requireString(
+      record.statusProperty,
+      "`notion.completedMeetings.statusProperty` is required.",
+    ),
+    doneStatusValue: optionalString(
+      record.doneStatusValue,
+      "`notion.completedMeetings.doneStatusValue` must be a string.",
+    ) ?? "Done",
+    canceledStatusValue: optionalString(
+      record.canceledStatusValue,
+      "`notion.completedMeetings.canceledStatusValue` must be a string.",
+    ) ?? (canceledMeetings?.action === "set_status" ? canceledMeetings.statusValue : "Canceled"),
+    lookback: normalizeRelativeWindow(
+      record.lookback,
+      "1d",
+      "`notion.completedMeetings.lookback` must be a relative range like `12h`, `5d`, `2w`, or `3m`.",
+    ),
+  };
+}
+
+function normalizeRelativeWindow(value: unknown, fallback: RelativeWindow, message: string): RelativeWindow {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (typeof value !== "string" || value === "today" || !isValidLookaheadWindow(value)) {
+    throw new ConfigError(message);
+  }
+
+  return value as RelativeWindow;
 }
 
 function normalizeDataSourceTemplate(value: unknown): NotionConfig["dataSourceTemplate"] {

@@ -52,6 +52,38 @@ describe("normalizeConfig", () => {
       statusProperty: "Status",
       statusValue: "Canceled",
     });
+    expect(config.notion.completedMeetings).toEqual({
+      statusProperty: "Status",
+      doneStatusValue: "Done",
+      canceledStatusValue: "Canceled",
+      lookback: "1d",
+    });
+  });
+
+  it("accepts explicit status mapping for completed meetings", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        completedMeetings: {
+          statusProperty: "State",
+          doneStatusValue: "Complete",
+          canceledStatusValue: "Canceled",
+          lookback: "2w",
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+    });
+
+    expect(config.notion.completedMeetings).toEqual({
+      statusProperty: "State",
+      doneStatusValue: "Complete",
+      canceledStatusValue: "Canceled",
+      lookback: "2w",
+    });
   });
 
   it("accepts name-based filters", () => {

@@ -790,4 +790,139 @@ describe("syncCalendarChangesToNotion", () => {
       "sync decision: notionEventId=evt-yesterday pageId=page-yesterday decision=skip_missing_outside_window",
     );
   });
+
+  it("marks past Notion meeting pages as done unless they are canceled", async () => {
+    const config: NolendarConfig = {
+      ...CONFIG,
+      notion: {
+        ...CONFIG.notion,
+        completedMeetings: {
+          statusProperty: "Status",
+          doneStatusValue: "Done",
+          canceledStatusValue: "Canceled",
+          lookback: "1d",
+        },
+      },
+    };
+    const notion = {
+      retrieveDataSource: vi.fn(async () => ({
+        id: "data-source-id",
+        title: "Meetings",
+        properties: {
+          Name: { id: "title", name: "Name", type: "title" },
+          Due: { id: "due", name: "Due", type: "date" },
+          "Outlook Event ID": { id: "event-id", name: "Outlook Event ID", type: "rich_text" },
+          "Outlook ChangeKey": { id: "change-key", name: "Outlook ChangeKey", type: "rich_text" },
+          Status: { id: "status", name: "Status", type: "status" },
+        },
+      })),
+      getDefaultAssigneeUserId: vi.fn(async () => undefined),
+      getTemplateBlocks: vi.fn(async () => []),
+      ensureProperties: vi.fn(async () => undefined),
+      findPageByEventId: vi
+        .fn()
+        .mockResolvedValueOnce({ id: "page-past", eventId: "evt-past", changeKey: "ck-1" })
+        .mockResolvedValueOnce({ id: "page-canceled", eventId: "evt-canceled", changeKey: "ck-1" })
+        .mockResolvedValueOnce({ id: "page-future", eventId: "evt-future", changeKey: "ck-1" }),
+      listMeetingPagePropertiesForWindow: vi.fn(async () => [
+        {
+          id: "page-yesterday",
+          properties: {
+            "Outlook Event ID": "evt-yesterday",
+            Due: {
+              start: "2026-05-22T13:00:00.000Z",
+              end: "2026-05-22T14:00:00.000Z",
+            },
+            Status: "Scheduled",
+          },
+        },
+        {
+          id: "page-past",
+          properties: {
+            "Outlook Event ID": "evt-past",
+            Due: {
+              start: "2026-05-23T13:00:00.000Z",
+              end: "2026-05-23T14:00:00.000Z",
+            },
+            Status: "Scheduled",
+          },
+        },
+        {
+          id: "page-canceled",
+          properties: {
+            "Outlook Event ID": "evt-canceled",
+            Due: {
+              start: "2026-05-23T13:30:00.000Z",
+              end: "2026-05-23T14:30:00.000Z",
+            },
+            Status: "Canceled",
+          },
+        },
+        {
+          id: "page-future",
+          properties: {
+            "Outlook Event ID": "evt-future",
+            Due: {
+              start: "2026-05-23T16:00:00.000Z",
+              end: "2026-05-23T17:00:00.000Z",
+            },
+            Status: "Scheduled",
+          },
+        },
+      ]),
+      createMeetingPage: vi.fn(async () => ({ id: "page-1" })),
+      updateMeetingPage: vi.fn(async () => undefined),
+      setPageStatus: vi.fn(async () => undefined),
+      archivePage: vi.fn(async () => undefined),
+      finalizeMeetingPageContent: vi.fn(async () => "appended"),
+    };
+
+    const result = await syncCalendarChangesToNotion(config, notion, {
+      meetingSource: {
+        listMeetingChanges: vi.fn(async () => ({
+          meetings: [
+            { ...MEETING, id: "evt-past", title: "Past", start: "2026-05-23T13:00:00.000Z", end: "2026-05-23T14:00:00.000Z" },
+            {
+              ...MEETING,
+              id: "evt-canceled",
+              title: "Canceled",
+              start: "2026-05-23T13:30:00.000Z",
+              end: "2026-05-23T14:30:00.000Z",
+            },
+            { ...MEETING, id: "evt-future", title: "Future", start: "2026-05-23T16:00:00.000Z", end: "2026-05-23T17:00:00.000Z" },
+          ],
+          removedEventIds: [],
+          deltaLink: "delta-1",
+        })),
+      },
+      loadState: vi.fn(async () => ({
+        version: 1 as const,
+        calendars: {},
+      })),
+      saveState: vi.fn(async () => undefined),
+      clock: {
+        now: () => new Date("2026-05-23T15:00:00.000Z"),
+      },
+    });
+
+    expect(notion.listMeetingPagePropertiesForWindow).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        start: "2026-05-22T04:00:00.000Z",
+        end: "2026-05-23T15:00:00.000Z",
+      }),
+    );
+    expect(result.updated).toBe(2);
+    expect(notion.setPageStatus).toHaveBeenCalledTimes(2);
+    expect(notion.setPageStatus).toHaveBeenCalledWith({
+      pageId: "page-yesterday",
+      propertyName: "Status",
+      statusName: "Done",
+    });
+    expect(notion.setPageStatus).toHaveBeenCalledWith({
+      pageId: "page-past",
+      propertyName: "Status",
+      statusName: "Done",
+    });
+  });
 });

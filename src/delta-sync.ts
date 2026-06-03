@@ -1,8 +1,9 @@
 import type { Clock } from "./clock.js";
 import { systemClock } from "./clock.js";
-import type { LookaheadWindow, NolendarConfig } from "./domain/config.js";
+import type { LookaheadWindow, NolendarConfig, RelativeWindow } from "./domain/config.js";
 import type { Meeting } from "./domain/meeting.js";
 import { resolveWindow, type CalendarWindow } from "./list.js";
+import { parseRelativeLookahead } from "./lookahead.js";
 import type { NotionClient } from "./notion/client.js";
 import {
   applyCanceledMeetingAction,
@@ -122,6 +123,13 @@ export async function syncCalendarChangesToNotion(
     .sort((left, right) => left.start.localeCompare(right.start) || left.title.localeCompare(right.title));
   const syncResult = await syncMeetingsToNotion(config, meetings, notion, syncOptions);
   const reconcileResult = await reconcileMissingNotionMeetings(config, currentWindowMeetings, notion, window, syncOptions);
+  const completeResult = await completePastNotionMeetings(
+    config,
+    notion,
+    window,
+    clock.now().toISOString(),
+    syncOptions,
+  );
 
   if (!syncResult.dryRun) {
     await saveState(config.sync.statePath, {
@@ -132,9 +140,9 @@ export async function syncCalendarChangesToNotion(
 
   return {
     ...syncResult,
-    updated: syncResult.updated + updated + reconcileResult.updated,
+    updated: syncResult.updated + updated + reconcileResult.updated + completeResult.updated,
     archived: syncResult.archived + archived + reconcileResult.archived,
-    skipped: syncResult.skipped + skipped + reconcileResult.skipped,
+    skipped: syncResult.skipped + skipped + reconcileResult.skipped + completeResult.skipped,
   };
 }
 
@@ -212,6 +220,105 @@ async function reconcileMissingNotionMeetings(
   return { archived, updated, skipped };
 }
 
+async function completePastNotionMeetings(
+  config: NolendarConfig,
+  notion: NotionClient,
+  window: CalendarWindow,
+  now: string,
+  syncOptions: SyncOptions,
+): Promise<{ updated: number; skipped: number }> {
+  const action = config.notion.completedMeetings;
+
+  if (!action || (!notion.listMeetingPagePropertiesForWindow && !notion.listMeetingPagesForWindow)) {
+    return { updated: 0, skipped: 0 };
+  }
+
+  if (!notion.setPageStatus) {
+    throw new Error("The configured Notion client does not support setting page status properties.");
+  }
+
+  const completionWindow = {
+    start: subtractRelativeWindow(window.start, action.lookback),
+    end: now,
+  };
+  const queryArgs = {
+    dataSourceId: config.notion.databaseId,
+    datePropertyName: config.mapping.due,
+    start: completionWindow.start,
+    end: completionWindow.end,
+  };
+  const pages = notion.listMeetingPagePropertiesForWindow
+    ? await notion.listMeetingPagePropertiesForWindow(queryArgs)
+    : await notion.listMeetingPagesForWindow?.(queryArgs);
+  let updated = 0;
+  let skipped = 0;
+
+  for (const page of pages ?? []) {
+    const eventId = readStringProperty(page.properties[config.mapping.eventId]);
+
+    if (!eventId) {
+      continue;
+    }
+
+    const meetingDate = readDatePropertyEndOrStart(page.properties[config.mapping.due]);
+
+    if (!meetingDate || meetingDate >= now) {
+      continue;
+    }
+
+    const currentStatus = readStringProperty(page.properties[action.statusProperty]);
+
+    if (currentStatus === action.canceledStatusValue || currentStatus === action.doneStatusValue) {
+      skipped += 1;
+      syncOptions.onDecision?.(
+        `sync decision: notionEventId=${eventId} pageId=${page.id} decision=skip_completed_already_status property=${action.statusProperty} value=${currentStatus}`,
+      );
+      continue;
+    }
+
+    updated += 1;
+    syncOptions.onDecision?.(
+      `sync decision: notionEventId=${eventId} pageId=${page.id} decision=set_status_completed property=${action.statusProperty} value=${action.doneStatusValue}`,
+    );
+
+    if (!syncOptions.dryRun) {
+      await notion.setPageStatus({
+        pageId: page.id,
+        propertyName: action.statusProperty,
+        statusName: action.doneStatusValue,
+      });
+    }
+  }
+
+  return { updated, skipped };
+}
+
+function subtractRelativeWindow(value: string, lookback: RelativeWindow): string {
+  const relative = parseRelativeLookahead(lookback);
+  const date = new Date(value);
+
+  if (!relative || Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  switch (relative.unit) {
+    case "h":
+      date.setTime(date.getTime() - relative.quantity * 60 * 60 * 1000);
+      break;
+    case "d":
+      date.setUTCDate(date.getUTCDate() - relative.quantity);
+      break;
+    case "w":
+      date.setUTCDate(date.getUTCDate() - relative.quantity * 7);
+      break;
+    case "m":
+      date.setUTCMonth(date.getUTCMonth() - relative.quantity);
+      break;
+  }
+
+  return date.toISOString();
+}
+
 function readStringProperty(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
@@ -238,6 +345,25 @@ function readDatePropertyStart(value: unknown): string | undefined {
   const start = (value as { start?: unknown }).start;
 
   return typeof start === "string" ? normalizeDateString(start) : undefined;
+}
+
+function readDatePropertyEndOrStart(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return normalizeDateString(value);
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const date = value as { start?: unknown; end?: unknown };
+  const end = typeof date.end === "string" ? normalizeDateString(date.end) : undefined;
+
+  if (end) {
+    return end;
+  }
+
+  return typeof date.start === "string" ? normalizeDateString(date.start) : undefined;
 }
 
 function normalizeDateString(value: string): string | undefined {
