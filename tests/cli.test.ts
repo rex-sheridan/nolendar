@@ -1,3 +1,5 @@
+import { Readable } from "node:stream";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createCli, runCli } from "../src/cli.js";
@@ -93,6 +95,70 @@ describe("cli", () => {
     expect(stderr.error).toHaveBeenCalledWith(
       "`--lookahead` must be `today` or a relative range like `12h`, `5d`, `2w`, or `3m`.",
     );
+  });
+
+  it("accepts verbose output for meeting augmentation", async () => {
+    const stdout = { log: vi.fn() };
+    const stderr = { error: vi.fn() };
+    const config: NolendarConfig = {
+      microsoft: { tenant: "common", authMode: "device_code" },
+      notion: {
+        databaseId: "meetings-id",
+      },
+      calendars: [{ id: "primary" }],
+      filters: {
+        ignoreDeclined: true,
+        requireAttendees: false,
+        ignorePersonal: false,
+        ignoreOptionalAttendance: false,
+      },
+      mapping: {
+        title: "Name",
+        due: "Due",
+        eventId: "Outlook Event ID",
+        changeKey: "Outlook ChangeKey",
+      },
+      sync: {
+        lookahead: "today",
+        statePath: "/tmp/.nolendar/state.json",
+      },
+    };
+    const appendMarkdownToPage = vi.fn(async () => undefined);
+
+    const exitCode = await runCli(
+      ["node", "nolendar", "augment", "--heading", "Follow-ups", "--day", "2026-05-22", "--verbose"],
+      {
+        stdout,
+        stderr,
+        stdin: Readable.from(["Planning\nSend summary."]),
+        loadConfig: vi.fn(async () => config),
+        buildNotionClient: () =>
+          ({
+            listMeetingPagePropertiesForWindow: vi.fn(async () => [
+              {
+                id: "page-1",
+                url: "https://notion.so/page-1",
+                properties: {
+                  Name: "Planning",
+                },
+              },
+            ]),
+            appendMarkdownToPage,
+          }) as never,
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(appendMarkdownToPage).toHaveBeenCalledWith({
+      pageId: "page-1",
+      heading: "Follow-ups",
+      content: "Send summary.",
+    });
+    expect(stdout.log).toHaveBeenCalledWith(
+      'Meeting augmentation summary: day=2026-05-22, heading="Follow-ups", matched=1, unmatched=0, ambiguous=0, empty=0, dryRun=false',
+    );
+    expect(stdout.log).toHaveBeenCalledWith("  matched: Planning -> page-1 (https://notion.so/page-1) appended");
+    expect(stderr.error).not.toHaveBeenCalled();
   });
 
   it("returns a non-zero exit code for invalid finalize delay values", async () => {
