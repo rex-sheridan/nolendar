@@ -73,4 +73,30 @@ describe("buildMarkdownBlocks", () => {
       },
     ]);
   });
+
+  it("unescapes escaped markdown characters inside link labels and urls", () => {
+    expect(
+      buildMarkdownBlocks(
+        "[\\[Alice and Rex \\| Meeting\\]](https://teams.microsoft.com/l/meeting/details?eventId=abc\\&EntityRepresentationId=def)",
+      ),
+    ).toEqual([
+      {
+        object: "block",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              type: "text",
+              text: {
+                content: "[Alice and Rex | Meeting]",
+                link: {
+                  url: "https://teams.microsoft.com/l/meeting/details?eventId=abc&EntityRepresentationId=def",
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+  });
 });

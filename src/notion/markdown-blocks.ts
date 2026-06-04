@@ -179,23 +179,23 @@ function codeBlock(content: string, language?: string): unknown {
 
 function parseRichText(markdown: string): RichText[] {
   const tokens: RichText[] = [];
-  const tokenPattern = /(\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|~~([^~]+)~~|`([^`]+)`)/g;
+  const tokenPattern = /(\[((?:\\.|[^\]\\])*)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|~~([^~]+)~~|`([^`]+)`)/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
 
   while ((match = tokenPattern.exec(markdown)) !== null) {
     if (match.index > cursor) {
-      tokens.push(textBlock(markdown.slice(cursor, match.index)));
+      tokens.push(textBlock(unescapeMarkdownText(markdown.slice(cursor, match.index))));
     }
 
     if (match[2] && match[3]) {
-      tokens.push(textBlock(match[2], { link: match[3] }));
+      tokens.push(textBlock(unescapeMarkdownText(match[2]), { link: unescapeMarkdownUrl(match[3]) }));
     } else if (match[4]) {
-      tokens.push(textBlock(match[4], { bold: true }));
+      tokens.push(textBlock(unescapeMarkdownText(match[4]), { bold: true }));
     } else if (match[5]) {
-      tokens.push(textBlock(match[5], { italic: true }));
+      tokens.push(textBlock(unescapeMarkdownText(match[5]), { italic: true }));
     } else if (match[6]) {
-      tokens.push(textBlock(match[6], { strikethrough: true }));
+      tokens.push(textBlock(unescapeMarkdownText(match[6]), { strikethrough: true }));
     } else if (match[7]) {
       tokens.push(textBlock(match[7], { code: true }));
     }
@@ -204,10 +204,18 @@ function parseRichText(markdown: string): RichText[] {
   }
 
   if (cursor < markdown.length) {
-    tokens.push(textBlock(markdown.slice(cursor)));
+    tokens.push(textBlock(unescapeMarkdownText(markdown.slice(cursor))));
   }
 
   return tokens.length > 0 ? tokens : [textBlock(" ")];
+}
+
+function unescapeMarkdownText(value: string): string {
+  return value.replace(/\\([\\`*_[\]{}()#+\-.!|>~&])/g, "$1");
+}
+
+function unescapeMarkdownUrl(value: string): string {
+  return value.replace(/\\([()&])/g, "$1");
 }
 
 function textBlock(
