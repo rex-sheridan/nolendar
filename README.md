@@ -22,6 +22,7 @@ Implemented now:
   - `notion.dataSourceTemplate`
 - Participant relation syncing through a separate Notion People data source
 - Configurable filters, tags, assignee resolution, page icons, and page content sections
+- General Markdown augmentation of matching Notion meeting pages under a chosen heading
 - CLI timings for Microsoft Graph and Notion API calls
 
 Remaining work is mostly polish:
@@ -93,6 +94,27 @@ nolendar sync --config nolendar.yml --dry-run
 ```bash
 nolendar sync --config nolendar.yml
 ```
+
+9. Augment today's Notion meeting pages with Markdown under any heading:
+
+```bash
+nolendar augment --config nolendar.yml --input augment.md --heading "AI Preparation" --dry-run
+nolendar augment --config nolendar.yml --input augment.md --heading "AI Preparation"
+```
+
+The input file should put each meeting title on its own line, followed by the Markdown content to append to that meeting:
+
+```markdown
+Planning
+- Key decision: confirm launch scope.
+- Before the meeting: review open risks.
+
+Design Review
+## Decisions to drive
+- Approve or reject the final layout direction.
+```
+
+Matching is scoped to the selected day and uses the Notion meeting title after case and whitespace normalization. Use `--day YYYY-MM-DD` for a different day. Omit `--input` to read from stdin, for example `agent-command | nolendar augment --config nolendar.yml --heading "Follow-ups"`.
 
 ## Requirements
 

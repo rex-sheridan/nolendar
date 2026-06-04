@@ -20,6 +20,7 @@ describe("cli", () => {
       "list-calendars",
       "list",
       "meetings",
+      "augment",
       "validate-config",
       "validate-notion",
       "print-notion-schema",

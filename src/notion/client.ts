@@ -52,6 +52,11 @@ export interface NotionClient {
     statusName: string;
   }): Promise<void>;
   archivePage(pageId: string): Promise<void>;
+  appendMarkdownToPage?(args: {
+    pageId: string;
+    heading: string;
+    content: string;
+  }): Promise<void>;
   finalizeMeetingPageContent(args: {
     pageId: string;
     config: NolendarConfig;

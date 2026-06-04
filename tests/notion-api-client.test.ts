@@ -1385,3 +1385,56 @@ describe("ApiNotionClient.listMeetingPagesForWindow", () => {
     );
   });
 });
+
+describe("ApiNotionClient.appendMarkdownToPage", () => {
+  it("appends markdown under the requested heading", async () => {
+    const append = vi.fn(async () => undefined);
+    const client = new ApiNotionClient("token", {
+      blocks: {
+        children: {
+          append,
+          list: vi.fn(),
+        },
+      },
+      dataSources: {
+        retrieve: vi.fn(),
+        update: vi.fn(),
+        query: vi.fn(),
+      },
+      pages: {
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.appendMarkdownToPage({
+      pageId: "page-1",
+      heading: "Follow-ups",
+      content: "- Send summary",
+    });
+
+    expect(append).toHaveBeenCalledWith({
+      block_id: "page-1",
+      children: [
+        {
+          object: "block",
+          type: "heading_2",
+          heading_2: {
+            rich_text: [{ type: "text", text: { content: "Follow-ups" } }],
+          },
+        },
+        {
+          object: "block",
+          type: "bulleted_list_item",
+          bulleted_list_item: {
+            rich_text: [{ type: "text", text: { content: "Send summary" } }],
+          },
+        },
+      ],
+    });
+  });
+});

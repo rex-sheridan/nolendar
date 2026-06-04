@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
 import { Command } from "commander";
 
@@ -27,6 +27,7 @@ import { validateOrEnsureNotionSchema } from "./notion/validation.js";
 import { syncCalendarChangesToNotion } from "./delta-sync.js";
 import { listMeetingContentsForDay, type MeetingContentsDetail, type MeetingContentsSource } from "./meeting-contents.js";
 import { compactLogIds } from "./log-compaction.js";
+import { importMeetingAugmentation } from "./meeting-augmentation.js";
 
 export interface CliDependencies {
   stdout: Pick<Console, "log">;
@@ -143,6 +144,69 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
 
         for (const line of output) {
           deps.stdout.log(line);
+        }
+      },
+    );
+
+  program
+    .command("augment")
+    .description("Append Markdown content to matching Notion meeting pages under the requested heading.")
+    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-i, --input <path>", "Path to input file. Reads stdin when omitted.")
+    .option("--day <day>", "Day to match: today, tomorrow, yesterday, +/-Nd, or YYYY-MM-DD", "today")
+    .requiredOption("--heading <heading>", "Notion heading to append imported content under")
+    .option("--dry-run", "Preview matched, unmatched, and ambiguous sections without changing Notion", false)
+    .option("--timings", "Print API call timings", false)
+    .option("--compact-ids", "Shorten long IDs in timing log output", false)
+    .action(
+      async (options: {
+        config: string;
+        input?: string;
+        day: string;
+        heading: string;
+        dryRun: boolean;
+        timings: boolean;
+        compactIds: boolean;
+      }) => {
+        const config = await loadConfigFn(options.config);
+        const timingReporter = options.timings ? createTimingReporter(deps, { compactIds: options.compactIds }) : undefined;
+        const notion = buildNotionClientFn({
+          timingReporter,
+        });
+        const input = await readInput(options.input, deps.stdin ?? process.stdin);
+        const result = await importMeetingAugmentation(
+          config,
+          input,
+          {
+            day: options.day,
+            dryRun: options.dryRun,
+            heading: options.heading,
+          },
+          {
+            notion,
+          },
+        );
+
+        deps.stdout.log(
+          `Meeting augmentation summary: day=${result.day.label}, heading=${JSON.stringify(options.heading)}, matched=${result.matched.length}, unmatched=${result.unmatched.length}, ambiguous=${result.ambiguous.length}, empty=${result.empty.length}, dryRun=${options.dryRun}`,
+        );
+
+        for (const match of result.matched) {
+          deps.stdout.log(
+            `  matched: ${match.title} -> ${match.pageId}${match.url ? ` (${match.url})` : ""}${match.appended ? " appended" : " dry-run"}`,
+          );
+        }
+
+        for (const section of result.unmatched) {
+          deps.stdout.log(`  unmatched: ${section.title}`);
+        }
+
+        for (const section of result.ambiguous) {
+          deps.stdout.log(`  ambiguous: ${section.title} -> ${section.pageIds.join(", ")}`);
+        }
+
+        for (const title of result.empty) {
+          deps.stdout.log(`  empty: ${title}`);
         }
       },
     );
@@ -433,6 +497,20 @@ function parseDelayMs(value: string): number {
   }
 
   return parsed;
+}
+
+async function readInput(inputPath: string | undefined, stdin: NodeJS.ReadableStream): Promise<string> {
+  if (inputPath) {
+    return readFile(inputPath, "utf8");
+  }
+
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+  }
+
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 async function resolveMicrosoftConfig(

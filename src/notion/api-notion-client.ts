@@ -14,6 +14,7 @@ import type {
   RequiredNotionProperty,
 } from "../domain/notion.js";
 import type { NotionClient } from "./client.js";
+import { buildMarkdownBlocks } from "./markdown-blocks.js";
 import { buildMeetingChildren, buildMeetingProperties } from "./page-payload.js";
 
 const NOTION_API_VERSION = "2026-03-11";
@@ -435,6 +436,25 @@ export class ApiNotionClient implements NotionClient {
       this.client.pages.update({
         page_id: pageId,
         in_trash: true,
+      }),
+    );
+  }
+
+  async appendMarkdownToPage(args: {
+    pageId: string;
+    heading: string;
+    content: string;
+  }): Promise<void> {
+    const children = buildMarkdownBlocks(`## ${args.heading}\n\n${args.content}`);
+
+    if (children.length === 0) {
+      return;
+    }
+
+    await this.timed("blocks.children.append", `block_id=${args.pageId} children=${children.length}`, () =>
+      this.client.blocks.children.append({
+        block_id: args.pageId,
+        children,
       }),
     );
   }
