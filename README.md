@@ -116,6 +116,28 @@ Design Review
 
 Matching is scoped to the selected day and uses the Notion meeting title after case and whitespace normalization. Use `--day YYYY-MM-DD` for a different day. Omit `--input` to read from stdin, for example `agent-command | nolendar augment --config nolendar.yml --heading "Follow-ups"`.
 
+If your generated input needs explicit meeting separators, set `notion.augmentation.delimiter` in `nolendar.yml` or pass `--delimiter <text>`. The CLI flag overrides the config value. The delimiter is matched as a full line after trimming whitespace; the first recognized meeting title after each delimiter becomes the section target:
+
+```bash
+nolendar augment --config nolendar.yml --input augment.md --heading "AI Preparation" --delimiter "%%MEETING%%"
+```
+
+```yaml
+notion:
+  augmentation:
+    delimiter: "%%MEETING%%"
+```
+
+```markdown
+%%MEETING%%
+Planning
+- Key decision: confirm launch scope.
+
+%%MEETING%%
+Design Review
+- Approve or reject the final layout direction.
+```
+
 ## Requirements
 
 - Node.js 20+
@@ -151,6 +173,8 @@ notion:
   #   type: default
   #   # templateId: your_data_source_template_id
   #   # timezone: America/New_York
+  augmentation:
+    delimiter: "%%MEETING%%"
   peopleDataSource:
     databaseId: your_people_data_source_id
     nameProperty: Name

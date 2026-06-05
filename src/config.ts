@@ -98,6 +98,7 @@ function normalizeNotion(value: unknown): NotionConfig {
   const databaseId = requireString(record.databaseId, "`notion.databaseId` is required.");
   const templatePageId = optionalString(record.templatePageId, "`notion.templatePageId` must be a string.");
   const dataSourceTemplate = normalizeDataSourceTemplate(record.dataSourceTemplate);
+  const augmentation = normalizeNotionAugmentation(record.augmentation);
   const pageContent = normalizeNotionPageContent(record.pageContent);
   const defaultTags = optionalStringArray(record.defaultTags, "`notion.defaultTags` must be an array of strings.");
   const defaultAssigneeEmail = optionalString(
@@ -113,6 +114,7 @@ function normalizeNotion(value: unknown): NotionConfig {
     databaseId,
     templatePageId,
     dataSourceTemplate,
+    augmentation,
     pageContent,
     defaultTags,
     defaultAssigneeEmail,
@@ -313,6 +315,19 @@ function optionalStringArray(value: unknown, message: string): string[] | undefi
   }
 
   return value;
+}
+
+function normalizeNotionAugmentation(value: unknown): NotionConfig["augmentation"] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const record = asRecord(value, "`notion.augmentation` must be an object.");
+  const delimiter = optionalString(record.delimiter, "`notion.augmentation.delimiter` must be a string.");
+
+  return {
+    delimiter,
+  };
 }
 
 function normalizeNotionPageIcon(value: unknown): NotionConfig["pageIcon"] {

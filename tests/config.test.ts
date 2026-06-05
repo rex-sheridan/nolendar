@@ -86,6 +86,26 @@ describe("normalizeConfig", () => {
     });
   });
 
+  it("accepts a default augmentation delimiter", () => {
+    const config = normalizeConfig({
+      notion: {
+        databaseId: "db_123",
+        augmentation: {
+          delimiter: "%%MEETING%%",
+        },
+      },
+      calendars: [
+        {
+          id: "primary",
+        },
+      ],
+    });
+
+    expect(config.notion.augmentation).toEqual({
+      delimiter: "%%MEETING%%",
+    });
+  });
+
   it("accepts name-based filters", () => {
     const config = normalizeConfig({
       notion: {

@@ -135,6 +135,37 @@ describe("parseMeetingAugmentationSections", () => {
       },
     ]);
   });
+
+  it("splits sections by a custom delimiter when provided", () => {
+    expect(
+      parseMeetingAugmentationSections(
+        [
+          "Intro text ignored.",
+          "%%MEETING%%",
+          "Planning",
+          "- Decide launch scope",
+          "Design Review",
+          "This line is content, not a new section.",
+          "%%MEETING%%",
+          "Design Review",
+          "- Approve final layout",
+        ].join("\n"),
+        ["Planning", "Design Review"],
+        {
+          delimiter: "%%MEETING%%",
+        },
+      ),
+    ).toEqual([
+      {
+        title: "Planning",
+        content: "- Decide launch scope\nDesign Review\nThis line is content, not a new section.",
+      },
+      {
+        title: "Design Review",
+        content: "- Approve final layout",
+      },
+    ]);
+  });
 });
 
 describe("importMeetingAugmentation", () => {
@@ -197,6 +228,110 @@ describe("importMeetingAugmentation", () => {
       },
     ]);
     expect(result.unmatched).toEqual([]);
+  });
+
+  it("uses a custom delimiter to separate imported meeting sections", async () => {
+    const appendMarkdownToPage = vi.fn(async () => undefined);
+
+    const result = await importMeetingAugmentation(
+      CONFIG,
+      [
+        "%%MEETING%%",
+        "Planning",
+        "- Send summary.",
+        "%%MEETING%%",
+        "Design Review",
+        "- Share mockups.",
+      ].join("\n"),
+      {
+        day: "2026-05-22",
+        delimiter: "%%MEETING%%",
+        heading: "Follow-ups",
+      },
+      {
+        notion: {
+          listMeetingPagePropertiesForWindow: vi.fn(async () => [
+            {
+              id: "planning-page",
+              properties: {
+                Name: "Planning",
+                Due: {
+                  start: "2026-05-22T13:00:00.000Z",
+                },
+              },
+            },
+            {
+              id: "design-page",
+              properties: {
+                Name: "Design Review",
+                Due: {
+                  start: "2026-05-22T14:00:00.000Z",
+                },
+              },
+            },
+          ]),
+          appendMarkdownToPage,
+        } as never,
+      },
+    );
+
+    expect(appendMarkdownToPage).toHaveBeenCalledWith({
+      pageId: "planning-page",
+      heading: "Follow-ups",
+      content: "- Send summary.",
+    });
+    expect(appendMarkdownToPage).toHaveBeenCalledWith({
+      pageId: "design-page",
+      heading: "Follow-ups",
+      content: "- Share mockups.",
+    });
+    expect(result.matched.map((match) => match.pageId)).toEqual(["planning-page", "design-page"]);
+  });
+
+  it("uses the configured augmentation delimiter when no delimiter option is provided", async () => {
+    const appendMarkdownToPage = vi.fn(async () => undefined);
+
+    const result = await importMeetingAugmentation(
+      {
+        ...CONFIG,
+        notion: {
+          ...CONFIG.notion,
+          augmentation: {
+            delimiter: "%%MEETING%%",
+          },
+        },
+      },
+      "%%MEETING%%\nPlanning\n- Send summary.",
+      {
+        day: "2026-05-22",
+        heading: "Follow-ups",
+      },
+      {
+        notion: {
+          listMeetingPagePropertiesForWindow: vi.fn(async () => [
+            {
+              id: "planning-page",
+              properties: {
+                Name: "Planning",
+                Due: {
+                  start: "2026-05-22T13:00:00.000Z",
+                },
+              },
+            },
+          ]),
+          appendMarkdownToPage,
+        } as never,
+      },
+    );
+
+    expect(result.matched).toEqual([
+      {
+        title: "Planning",
+        pageId: "planning-page",
+        url: undefined,
+        appended: true,
+      },
+    ]);
   });
 
   it("ignores matching titles outside the selected day when deciding ambiguity", async () => {

@@ -15,6 +15,10 @@ export interface MeetingSectionTime {
   endMinutes?: number;
 }
 
+export interface MeetingAugmentationParseOptions {
+  delimiter?: string;
+}
+
 export interface ImportMeetingAugmentationResult {
   day: DayWindow;
   matched: Array<{
@@ -36,6 +40,7 @@ export async function importMeetingAugmentation(
   input: string,
   options: {
     day?: string;
+    delimiter?: string;
     dryRun?: boolean;
     heading: string;
   },
@@ -52,6 +57,12 @@ export async function importMeetingAugmentation(
     throw new Error("`--heading` must not be empty.");
   }
 
+  const delimiter = options.delimiter ?? config.notion.augmentation?.delimiter;
+
+  if (delimiter !== undefined && !delimiter.trim()) {
+    throw new Error("`--delimiter` must not be empty.");
+  }
+
   const day = resolveDayWindow(options.day ?? "today");
   const pages = filterAugmentableMeetingPages(
     config,
@@ -64,7 +75,9 @@ export async function importMeetingAugmentation(
     }),
   );
   const pageMatches = buildPageTitleMatches(config, pages);
-  const sections = parseMeetingAugmentationSections(input, listPageTitles(config, pages));
+  const sections = parseMeetingAugmentationSections(input, listPageTitles(config, pages), {
+    delimiter,
+  });
   const result: ImportMeetingAugmentationResult = {
     day,
     matched: [],
@@ -119,7 +132,17 @@ export async function importMeetingAugmentation(
   return result;
 }
 
-export function parseMeetingAugmentationSections(input: string, knownTitles: string[]): MeetingAugmentationSection[] {
+export function parseMeetingAugmentationSections(
+  input: string,
+  knownTitles: string[],
+  options: MeetingAugmentationParseOptions = {},
+): MeetingAugmentationSection[] {
+  const delimiter = options.delimiter?.trim();
+
+  if (delimiter) {
+    return parseMeetingAugmentationSectionsByDelimiter(input, knownTitles, delimiter);
+  }
+
   const titleLookup = buildTitleLookup(knownTitles);
   const sections: MeetingAugmentationSection[] = [];
   let currentTitle: string | undefined;
@@ -155,6 +178,56 @@ export function parseMeetingAugmentationSections(input: string, knownTitles: str
 
   flush();
   return sections;
+}
+
+function parseMeetingAugmentationSectionsByDelimiter(
+  input: string,
+  knownTitles: string[],
+  delimiter: string,
+): MeetingAugmentationSection[] {
+  const titleLookup = buildTitleLookup(knownTitles);
+  const sections: MeetingAugmentationSection[] = [];
+
+  for (const chunk of splitInputByDelimiter(input, delimiter)) {
+    const lines = chunk;
+    const titleIndex = lines.findIndex((line) => Boolean(findKnownTitle(line, titleLookup)));
+
+    if (titleIndex < 0) {
+      continue;
+    }
+
+    const title = findKnownTitle(lines[titleIndex], titleLookup);
+    if (!title) {
+      continue;
+    }
+
+    const contentLines = lines.slice(titleIndex + 1);
+    sections.push({
+      title,
+      content: contentLines.join("\n").trim(),
+      time: extractSectionTime(contentLines),
+    });
+  }
+
+  return sections;
+}
+
+function splitInputByDelimiter(input: string, delimiter: string): string[][] {
+  const chunks: string[][] = [];
+  let currentLines: string[] = [];
+
+  for (const line of input.replace(/\r\n/g, "\n").split("\n")) {
+    if (line.trim() === delimiter) {
+      chunks.push(currentLines);
+      currentLines = [];
+      continue;
+    }
+
+    currentLines.push(line);
+  }
+
+  chunks.push(currentLines);
+  return chunks;
 }
 
 function resolveMatchesBySectionTime(

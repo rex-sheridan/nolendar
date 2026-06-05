@@ -155,6 +155,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("-i, --input <path>", "Path to input file. Reads stdin when omitted.")
     .option("--day <day>", "Day to match: today, tomorrow, yesterday, +/-Nd, or YYYY-MM-DD", "today")
     .requiredOption("--heading <heading>", "Notion heading to append imported content under")
+    .option("--delimiter <text>", "Literal line that separates meeting sections in the input")
     .option("--dry-run", "Preview matched, unmatched, and ambiguous sections without changing Notion", false)
     .option("--verbose", "Print per-meeting augmentation decisions", false)
     .option("--timings", "Print API call timings", false)
@@ -164,6 +165,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
         config: string;
         input?: string;
         day: string;
+        delimiter?: string;
         heading: string;
         dryRun: boolean;
         verbose: boolean;
@@ -181,6 +183,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
           input,
           {
             day: options.day,
+            delimiter: options.delimiter,
             dryRun: options.dryRun,
             heading: options.heading,
           },

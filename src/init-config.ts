@@ -16,6 +16,8 @@ notion:
   # Native data source templates use a deferred content workflow:
   # sync will finalize generated meeting content automatically after a short delay
   # finalize-templates is still available as a manual fallback
+  augmentation:
+    delimiter: "%%MEETING%%"
   peopleDataSource:
     databaseId: your_people_data_source_id
     nameProperty: Name

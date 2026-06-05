@@ -104,6 +104,9 @@ describe("cli", () => {
       microsoft: { tenant: "common", authMode: "device_code" },
       notion: {
         databaseId: "meetings-id",
+        augmentation: {
+          delimiter: "%%MEETING%%",
+        },
       },
       calendars: [{ id: "primary" }],
       filters: {
@@ -130,7 +133,7 @@ describe("cli", () => {
       {
         stdout,
         stderr,
-        stdin: Readable.from(["Planning\nSend summary."]),
+        stdin: Readable.from(["%%MEETING%%\nPlanning\nSend summary."]),
         loadConfig: vi.fn(async () => config),
         buildNotionClient: () =>
           ({

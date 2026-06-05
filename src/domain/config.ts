@@ -12,6 +12,7 @@ export interface NotionConfig {
   databaseId: string;
   templatePageId?: string;
   dataSourceTemplate?: NotionDataSourceTemplateConfig;
+  augmentation?: NotionAugmentationConfig;
   pageContent?: NotionPageContentConfig;
   defaultTags?: string[];
   defaultAssigneeEmail?: string;
@@ -36,6 +37,10 @@ export interface NotionCompletedMeetingsConfig {
   doneStatusValue: string;
   canceledStatusValue: string;
   lookback: RelativeWindow;
+}
+
+export interface NotionAugmentationConfig {
+  delimiter?: string;
 }
 
 export interface NotionDataSourceTemplateConfig {
