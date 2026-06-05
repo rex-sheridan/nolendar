@@ -312,6 +312,8 @@ export class ApiNotionClient implements NotionClient {
       id?: string;
       object?: string;
       url?: string;
+      archived?: boolean;
+      in_trash?: boolean;
       properties?: Record<string, unknown>;
     }> = [];
     let nextCursor: string | undefined;
@@ -345,6 +347,8 @@ export class ApiNotionClient implements NotionClient {
           id?: string;
           object?: string;
           url?: string;
+          archived?: boolean;
+          in_trash?: boolean;
           properties?: Record<string, unknown>;
         }>;
         next_cursor?: string | null;
@@ -358,6 +362,8 @@ export class ApiNotionClient implements NotionClient {
     return pages.map((page) => ({
       id: page.id ?? "",
       url: page.url,
+      ...(typeof page.archived === "boolean" ? { archived: page.archived } : {}),
+      ...(typeof page.in_trash === "boolean" ? { inTrash: page.in_trash } : {}),
       properties: normalizePageProperties(page.properties ?? {}),
     }));
   }

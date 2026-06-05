@@ -1312,6 +1312,8 @@ describe("ApiNotionClient.listMeetingPagesForWindow", () => {
             object: "page",
             id: "page-1",
             url: "https://notion.so/page-1",
+            archived: false,
+            in_trash: true,
             properties: {
               Name: {
                 type: "title",
@@ -1369,6 +1371,8 @@ describe("ApiNotionClient.listMeetingPagesForWindow", () => {
       {
         id: "page-1",
         url: "https://notion.so/page-1",
+        archived: false,
+        inTrash: true,
         properties: {
           Name: "Planning",
           "Outlook Event ID": "evt-1",

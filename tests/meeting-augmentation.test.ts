@@ -146,12 +146,18 @@ describe("importMeetingAugmentation", () => {
         url: "https://notion.so/page-1",
         properties: {
           Name: "Planning",
+          Due: {
+            start: "2026-05-22T13:00:00.000Z",
+          },
         },
       },
       {
         id: "page-2",
         properties: {
           Name: "Design Review",
+          Due: {
+            start: "2026-05-22T14:00:00.000Z",
+          },
         },
       },
     ]);
@@ -191,6 +197,124 @@ describe("importMeetingAugmentation", () => {
       },
     ]);
     expect(result.unmatched).toEqual([]);
+  });
+
+  it("ignores matching titles outside the selected day when deciding ambiguity", async () => {
+    const appendMarkdownToPage = vi.fn(async () => undefined);
+
+    const result = await importMeetingAugmentation(
+      CONFIG,
+      "Planning\nDecide launch scope.",
+      {
+        day: "2026-05-22",
+        heading: "Decisions",
+      },
+      {
+        notion: {
+          listMeetingPagePropertiesForWindow: vi.fn(async () => [
+            {
+              id: "prior-week-page",
+              properties: {
+                Name: "Planning",
+                Due: {
+                  start: "2026-05-15T13:00:00.000Z",
+                },
+              },
+            },
+            {
+              id: "selected-day-page",
+              properties: {
+                Name: "Planning",
+                Due: {
+                  start: "2026-05-22T13:00:00.000Z",
+                },
+              },
+            },
+          ]),
+          appendMarkdownToPage,
+        } as never,
+      },
+    );
+
+    expect(result.ambiguous).toEqual([]);
+    expect(result.matched).toEqual([
+      {
+        title: "Planning",
+        pageId: "selected-day-page",
+        url: undefined,
+        appended: true,
+      },
+    ]);
+  });
+
+  it("ignores trashed and canceled pages when deciding ambiguity", async () => {
+    const appendMarkdownToPage = vi.fn(async () => undefined);
+
+    const result = await importMeetingAugmentation(
+      {
+        ...CONFIG,
+        notion: {
+          ...CONFIG.notion,
+          canceledMeetings: {
+            action: "set_status",
+            statusProperty: "Status",
+            statusValue: "Canceled",
+          },
+        },
+      },
+      "Planning\nDecide launch scope.",
+      {
+        day: "2026-05-22",
+        heading: "Decisions",
+      },
+      {
+        notion: {
+          listMeetingPagePropertiesForWindow: vi.fn(async () => [
+            {
+              id: "trashed-page",
+              inTrash: true,
+              properties: {
+                Name: "Planning",
+                Due: {
+                  start: "2026-05-22T09:00:00.000Z",
+                },
+              },
+            },
+            {
+              id: "canceled-page",
+              properties: {
+                Name: "Planning",
+                Due: {
+                  start: "2026-05-22T10:00:00.000Z",
+                },
+                Status: "Canceled",
+              },
+            },
+            {
+              id: "active-page",
+              properties: {
+                Name: "Planning",
+                Due: {
+                  start: "2026-05-22T13:00:00.000Z",
+                },
+                Status: "To Do",
+              },
+            },
+          ]),
+          appendMarkdownToPage,
+        } as never,
+      },
+    );
+
+    expect(result.ambiguous).toEqual([]);
+    expect(result.matched).toEqual([
+      {
+        title: "Planning",
+        pageId: "active-page",
+        url: undefined,
+        appended: true,
+      },
+    ]);
   });
 
   it("uses section time as a tie-breaker when title matches multiple pages", async () => {
@@ -267,8 +391,20 @@ describe("importMeetingAugmentation", () => {
       {
         notion: {
           listMeetingPagePropertiesForWindow: vi.fn(async () => [
-            { id: "page-1", properties: { Name: "Planning" } },
-            { id: "page-2", properties: { Name: "Planning" } },
+            {
+              id: "page-1",
+              properties: {
+                Name: "Planning",
+                Due: { start: "2026-05-22T09:00:00.000Z" },
+              },
+            },
+            {
+              id: "page-2",
+              properties: {
+                Name: "Planning",
+                Due: { start: "2026-05-22T13:00:00.000Z" },
+              },
+            },
           ]),
           appendMarkdownToPage,
         } as never,

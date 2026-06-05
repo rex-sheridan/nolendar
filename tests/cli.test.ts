@@ -140,6 +140,9 @@ describe("cli", () => {
                 url: "https://notion.so/page-1",
                 properties: {
                   Name: "Planning",
+                  Due: {
+                    start: "2026-05-22T13:00:00.000Z",
+                  },
                 },
               },
             ]),

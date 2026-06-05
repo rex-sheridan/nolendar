@@ -49,6 +49,8 @@ export interface NotionMeetingPage {
 export interface NotionMeetingPageProperties {
   id: string;
   url?: string;
+  archived?: boolean;
+  inTrash?: boolean;
   properties: Record<string, unknown>;
 }
 

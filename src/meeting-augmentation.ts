@@ -53,12 +53,16 @@ export async function importMeetingAugmentation(
   }
 
   const day = resolveDayWindow(options.day ?? "today");
-  const pages = await deps.notion.listMeetingPagePropertiesForWindow({
-    dataSourceId: config.notion.databaseId,
-    datePropertyName: config.mapping.due,
-    start: day.start,
-    end: day.end,
-  });
+  const pages = filterAugmentableMeetingPages(
+    config,
+    day,
+    await deps.notion.listMeetingPagePropertiesForWindow({
+      dataSourceId: config.notion.databaseId,
+      datePropertyName: config.mapping.due,
+      start: day.start,
+      end: day.end,
+    }),
+  );
   const pageMatches = buildPageTitleMatches(config, pages);
   const sections = parseMeetingAugmentationSections(input, listPageTitles(config, pages));
   const result: ImportMeetingAugmentationResult = {
@@ -255,6 +259,68 @@ function buildPageTitleMatches(
   }
 
   return matches;
+}
+
+function filterAugmentableMeetingPages(
+  config: NolendarConfig,
+  day: DayWindow,
+  pages: NotionMeetingPageProperties[],
+): NotionMeetingPageProperties[] {
+  return pages.filter(
+    (page) => pageIsOnDay(page, config.mapping.due, day) && !pageIsArchived(page) && !pageIsCanceled(config, page),
+  );
+}
+
+function pageIsOnDay(page: NotionMeetingPageProperties, datePropertyName: string, day: DayWindow): boolean {
+  const date = page.properties[datePropertyName];
+
+  if (!date || typeof date !== "object" || Array.isArray(date)) {
+    return false;
+  }
+
+  const start = readDateStart(date);
+  if (!start) {
+    return false;
+  }
+
+  const startTime = Date.parse(start);
+  if (Number.isNaN(startTime)) {
+    return false;
+  }
+
+  return startTime >= Date.parse(day.start) && startTime < Date.parse(day.end);
+}
+
+function pageIsArchived(page: NotionMeetingPageProperties): boolean {
+  return page.archived === true || page.inTrash === true;
+}
+
+function pageIsCanceled(config: NolendarConfig, page: NotionMeetingPageProperties): boolean {
+  const canceledMeetings = config.notion.canceledMeetings;
+
+  if (canceledMeetings?.action !== "set_status") {
+    return false;
+  }
+
+  return readStatusName(page.properties[canceledMeetings.statusProperty]) === canceledMeetings.statusValue;
+}
+
+function readStatusName(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as { status?: unknown };
+  if (!record.status || typeof record.status !== "object" || Array.isArray(record.status)) {
+    return undefined;
+  }
+
+  const status = record.status as { name?: unknown };
+  return typeof status.name === "string" ? status.name : undefined;
 }
 
 function listPageTitles(config: NolendarConfig, pages: NotionMeetingPageProperties[]): string[] {
