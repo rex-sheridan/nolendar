@@ -179,7 +179,7 @@ function codeBlock(content: string, language?: string): unknown {
 
 function parseRichText(markdown: string): RichText[] {
   const tokens: RichText[] = [];
-  const tokenPattern = /(\[((?:\\.|[^\]\\])*)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|~~([^~]+)~~|`([^`]+)`)/g;
+  const tokenPattern = /(\\?\[((?:\\.|[^\]\\])*)\\?\]\\?\((https?:\/\/(?:\\.|[^\\)\s])+)\\?\)|\*\*([^*]+)\*\*|\*([^*]+)\*|~~([^~]+)~~|`([^`]+)`)/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
 
@@ -215,7 +215,7 @@ function unescapeMarkdownText(value: string): string {
 }
 
 function unescapeMarkdownUrl(value: string): string {
-  return value.replace(/\\([()&])/g, "$1");
+  return value.replace(/\\([^\s])/g, "$1");
 }
 
 function textBlock(

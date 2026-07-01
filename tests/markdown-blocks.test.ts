@@ -99,4 +99,30 @@ describe("buildMarkdownBlocks", () => {
       },
     ]);
   });
+
+  it("preserves links when the markdown link delimiters are escaped", () => {
+    expect(
+      buildMarkdownBlocks(
+        "\\[Alice and Rex\\]\\(https://teams.microsoft.com/l/meeting/details?eventId=abc\\&EntityRepresentationId=def\\)",
+      ),
+    ).toEqual([
+      {
+        object: "block",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              type: "text",
+              text: {
+                content: "Alice and Rex",
+                link: {
+                  url: "https://teams.microsoft.com/l/meeting/details?eventId=abc&EntityRepresentationId=def",
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+  });
 });
