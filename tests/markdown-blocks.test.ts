@@ -100,6 +100,32 @@ describe("buildMarkdownBlocks", () => {
     ]);
   });
 
+  it("preserves normal markdown links without requiring escaped delimiters or urls", () => {
+    expect(
+      buildMarkdownBlocks(
+        "[Alice and Rex](https://teams.microsoft.com/l/meeting/details?eventId=abc&EntityRepresentationId=def)",
+      ),
+    ).toEqual([
+      {
+        object: "block",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              type: "text",
+              text: {
+                content: "Alice and Rex",
+                link: {
+                  url: "https://teams.microsoft.com/l/meeting/details?eventId=abc&EntityRepresentationId=def",
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+  });
+
   it("preserves links when the markdown link delimiters are escaped", () => {
     expect(
       buildMarkdownBlocks(
