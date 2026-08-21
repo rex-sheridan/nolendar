@@ -28,6 +28,7 @@ import { syncCalendarChangesToNotion } from "./delta-sync.js";
 import { listMeetingContentsForDay, type MeetingContentsDetail, type MeetingContentsSource } from "./meeting-contents.js";
 import { compactLogIds } from "./log-compaction.js";
 import { importMeetingAugmentation } from "./meeting-augmentation.js";
+import { defaultConfigFilePath, defaultEnvFilePath } from "./xdg.js";
 
 export interface CliDependencies {
   stdout: Pick<Console, "log">;
@@ -38,11 +39,15 @@ export interface CliDependencies {
   configWizardPrompt?: ConfigWizardPrompt;
   stdin?: NodeJS.ReadableStream;
   output?: NodeJS.WritableStream;
+  env?: NodeJS.ProcessEnv;
+  homeDir?: string;
+  pathExists?: (path: string) => Promise<boolean>;
 }
 
 export function createCli(deps: CliDependencies = defaultDeps()): Command {
   const program = new Command();
-  const loadConfigFn = deps.loadConfig ?? loadConfig;
+  const loadConfigFn = deps.loadConfig ?? ((configPath: string) => loadConfig(configPath, deps.env ?? process.env, deps.homeDir));
+  const defaultConfigPath = defaultConfigFilePath(deps.env ?? process.env, deps.homeDir);
   const buildNotionClientFn = deps.buildNotionClient ?? ((options?: { timingReporter?: ApiTimingReporter }) => buildNotionClient(deps, options));
 
   program.name("nolendar").description("Sync Outlook meetings into Notion.");
@@ -56,7 +61,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
     .option("--timings", "Print API call timings", false)
     .option("--compact-ids", "Shorten long IDs in timing and verbose log output", false)
     .action(async (options: { config?: string; tenant?: string; authMode?: string; timings: boolean; compactIds: boolean }) => {
-      const microsoft = await resolveMicrosoftConfig(options, loadConfigFn);
+      const microsoft = await resolveMicrosoftConfig(options, loadConfigFn, deps);
       const timingReporter = options.timings ? createTimingReporter(deps, { compactIds: options.compactIds }) : undefined;
       const graph = buildGraphMeetingSourceFromMicrosoftConfig(microsoft, deps, timingReporter);
       const calendars = await graph.listCalendars();
@@ -75,7 +80,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   program
     .command("list")
     .description("Print upcoming meetings for the requested time period.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("--lookahead <window>", "One of: today, 24h, 7d")
     .option("--timings", "Print API call timings", false)
     .option("--compact-ids", "Shorten long IDs in timing log output", false)
@@ -105,7 +110,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   program
     .command("meetings")
     .description("Print meeting contents for a single day from Outlook or Notion.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("--source <source>", "Meeting source: outlook or notion", "outlook")
     .option("--day <day>", "Day to inspect: today, tomorrow, yesterday, +/-Nd, or YYYY-MM-DD", "today")
     .option("--full-properties", "Print all available normalized properties in addition to title/date/body", false)
@@ -151,7 +156,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   program
     .command("augment")
     .description("Append Markdown content to matching Notion meeting pages under the requested heading.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("-i, --input <path>", "Path to input file. Reads stdin when omitted.")
     .option("--day <day>", "Day to match: today, tomorrow, yesterday, +/-Nd, or YYYY-MM-DD", "today")
     .requiredOption("--heading <heading>", "Notion heading to append imported content under")
@@ -221,7 +226,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   program
     .command("validate-config")
     .description("Validate YAML config and print the normalized result.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .action(async (options: { config: string }) => {
       const config = await loadConfigFn(options.config);
       deps.stdout.log(JSON.stringify(config, null, 2));
@@ -230,7 +235,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   program
     .command("validate-notion")
     .description("Validate Notion access and required data source properties.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("--ensure-properties", "Create missing required properties if possible", false)
     .option("--timings", "Print API call timings", false)
     .option("--compact-ids", "Shorten long IDs in timing log output", false)
@@ -256,7 +261,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   program
     .command("print-notion-schema")
     .description("Print the detected Notion schema for the configured meeting and People data sources.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("--timings", "Print API call timings", false)
     .option("--compact-ids", "Shorten long IDs in timing log output", false)
     .action(async (options: { config: string; timings: boolean; compactIds: boolean }) => {
@@ -281,7 +286,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   program
     .command("sync")
     .description("Create or update Notion meeting pages from Outlook meetings.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("--lookahead <window>", "One of: today, 24h, 7d")
     .option("--dry-run", "Preview sync actions without changing Notion", false)
     .option("--ensure-properties", "Create missing required properties if possible", false)
@@ -349,7 +354,7 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
   program
     .command("finalize-templates")
     .description("Append Nolendar meeting content to pages created from native Notion data source templates.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("--lookahead <window>", "One of: today, 24h, 7d")
     .option("--ensure-properties", "Create missing required properties if possible", false)
     .option("--timings", "Print API call timings", false)
@@ -378,8 +383,8 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
 
   program
     .command("init")
-    .description("Generate a starter nolendar.yml config file.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .description("Generate a starter YAML config file.")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("--force", "Overwrite an existing config file", false)
     .option("--wizard", "Guide setup interactively", false)
     .action(async (options: { config: string; force: boolean; wizard: boolean }) => {
@@ -407,8 +412,8 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
 
   program
     .command("wizard")
-    .description("Guide setup of a nolendar.yml config file.")
-    .option("-c, --config <path>", "Path to YAML config file", "nolendar.yml")
+    .description("Guide setup of a YAML config file.")
+    .option("-c, --config <path>", "Path to YAML config file", defaultConfigPath)
     .option("--force", "Overwrite an existing config file", false)
     .action(async (options: { config: string; force: boolean }) => {
       const writtenPath = await runConfigWizard({
@@ -431,7 +436,8 @@ export function createCli(deps: CliDependencies = defaultDeps()): Command {
 
 export async function runCli(argv = process.argv, deps?: CliDependencies): Promise<number> {
   try {
-    await loadLocalEnvFile();
+    const env = deps?.env ?? process.env;
+    await loadLocalEnvFile(defaultEnvFilePath(env, deps?.homeDir), env);
     const cli = createCli(deps);
     await cli.parseAsync(argv);
     return 0;
@@ -523,8 +529,13 @@ async function readInput(inputPath: string | undefined, stdin: NodeJS.ReadableSt
 async function resolveMicrosoftConfig(
   options: { config?: string; tenant?: string; authMode?: string },
   loadConfigFn: typeof loadConfig,
+  deps: CliDependencies,
 ): Promise<MicrosoftConfig> {
-  const configPath = options.config ?? (await optionalDefaultConfigPath());
+  const configPath = options.config ?? (await optionalDefaultConfigPath(
+    deps.env ?? process.env,
+    deps.homeDir,
+    deps.pathExists ?? defaultPathExists,
+  ));
   const baseConfig = configPath ? (await loadConfigFn(configPath)).microsoft : defaultMicrosoftConfig();
 
   return {
@@ -533,15 +544,23 @@ async function resolveMicrosoftConfig(
   };
 }
 
-async function optionalDefaultConfigPath(): Promise<string | undefined> {
-  const configPath = "nolendar.yml";
+async function optionalDefaultConfigPath(
+  env: NodeJS.ProcessEnv = process.env,
+  homeDir?: string,
+  pathExists: (path: string) => Promise<boolean> = defaultPathExists,
+): Promise<string | undefined> {
+  const configPath = defaultConfigFilePath(env, homeDir);
 
+  return (await pathExists(configPath)) ? configPath : undefined;
+}
+
+async function defaultPathExists(filePath: string): Promise<boolean> {
   try {
-    await access(configPath);
-    return configPath;
+    await access(filePath);
+    return true;
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
-      return undefined;
+      return false;
     }
 
     throw error;
@@ -618,7 +637,7 @@ function buildGraphMeetingSourceFromMicrosoftConfig(
   deps: CliDependencies,
   timingReporter?: ApiTimingReporter,
 ): GraphMeetingSource {
-  const authConfig = resolveGraphAuthConfig({ microsoft });
+  const authConfig = resolveGraphAuthConfig({ microsoft }, deps.env ?? process.env);
 
   if (authConfig.mode === "auth_code") {
     return new GraphMeetingSource(new AuthorizationCodeTokenProvider(authConfig, deps.stdout), undefined, timingReporter);
@@ -636,5 +655,5 @@ function buildGraphMeetingSourceFromMicrosoftConfig(
 }
 
 function buildNotionClient(_: CliDependencies, options?: { timingReporter?: ApiTimingReporter }): ApiNotionClient {
-  return new ApiNotionClient(resolveNotionAuthToken(), undefined, options?.timingReporter);
+  return new ApiNotionClient(resolveNotionAuthToken(_.env ?? process.env), undefined, options?.timingReporter);
 }

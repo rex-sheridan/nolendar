@@ -142,7 +142,7 @@ Notes:
 
 - `MICROSOFT_REDIRECT_URI` must exactly match the app registration
 - Nolendar opens a browser and waits for the localhost callback the first time, then reuses the persisted MSAL token cache for later runs while the cached refresh token remains valid
-- the default token cache path is `~/.nolendar/msal-cache.json`; set `MICROSOFT_TOKEN_CACHE_PATH` to use a different file
+- the default token cache path is `$XDG_DATA_HOME/nolendar/msal-cache.json` (default `~/.local/share/nolendar/msal-cache.json`); set `MICROSOFT_TOKEN_CACHE_PATH` to use a different file
 
 ### Option 3: `interactive_browser`
 

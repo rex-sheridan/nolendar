@@ -7,7 +7,7 @@ Nolendar is a TypeScript CLI that reads Outlook calendar events through Microsof
 ```mermaid
 flowchart LR
   user[User / scheduler] --> cli[Nolendar CLI<br/>src/cli.ts]
-  cli --> config[YAML config + env<br/>nolendar.yml, NOTION_TOKEN,<br/>MICROSOFT_*]
+  cli --> config[XDG config + env<br/>config.yml, env,<br/>NOTION_TOKEN, MICROSOFT_*]
 
   config --> graphAuth[Graph auth resolver<br/>src/graph/auth.ts]
   graphAuth --> tokenProvider{Token provider}
@@ -21,7 +21,7 @@ flowchart LR
   msGraph --> outlook[Outlook calendars]
 
   cli --> orchestrator[Delta sync orchestrator<br/>src/delta-sync.ts]
-  orchestrator --> state[(Local sync state<br/>.nolendar/state.json)]
+  orchestrator --> state[(XDG sync state<br/>$XDG_STATE_HOME/nolendar/state.json)]
   orchestrator --> graphSource
   orchestrator --> syncEngine[Meeting sync engine<br/>src/sync.ts]
 
@@ -49,7 +49,7 @@ flowchart TD
   loadConfig --> resolveWindow[Resolve lookahead window]
   resolveWindow --> buildClients[Build Graph source and Notion client]
   buildClients --> validateSchema[Validate or optionally ensure Notion schema]
-  validateSchema --> loadState[Load .nolendar/state.json]
+  validateSchema --> loadState[Load XDG state.json]
   loadState --> calendarLoop{For each configured calendar}
 
   calendarLoop --> reuseDelta{Saved delta link matches<br/>lookahead and window?}
@@ -97,7 +97,7 @@ flowchart TD
   moreMeetings -- yes --> meetingLoop
   moreMeetings -- no --> dryRun{Dry run?}
   dryRun -- yes --> summary[Print sync summary]
-  dryRun -- no --> saveState[Save updated delta links<br/>to .nolendar/state.json]
+  dryRun -- no --> saveState[Save updated delta links<br/>to XDG state.json]
 
   saveState --> nativeTemplate{Native data source<br/>template configured?}
   nativeTemplate -- no --> summary
@@ -107,4 +107,3 @@ flowchart TD
   finalize --> summary
   summary --> done([Done])
 ```
-

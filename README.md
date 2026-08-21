@@ -55,7 +55,7 @@ alias nolendar="$(pwd)/bin/nolendar"
 nolendar wizard
 ```
 
-   The wizard writes progress to `nolendar.yml` as you go. It walks through Microsoft authentication, Outlook calendar selection, Notion data source selection, property mappings, and optional sections such as filters, templates, page content, and sync settings.
+   The wizard writes progress to `$XDG_CONFIG_HOME/nolendar/config.yml` (default `~/.config/nolendar/config.yml`) as you go. It walks through Microsoft authentication, Outlook calendar selection, Notion data source selection, property mappings, and optional sections such as filters, templates, page content, and sync settings.
 
    You can also run the same interactive flow through `init`:
 
@@ -74,32 +74,32 @@ nolendar init
 5. Validate config:
 
 ```bash
-nolendar validate-config --config nolendar.yml
+nolendar validate-config
 ```
 
 6. Validate Notion access and schema:
 
 ```bash
-nolendar validate-notion --config nolendar.yml
+nolendar validate-notion
 ```
 
 7. Preview sync without writing:
 
 ```bash
-nolendar sync --config nolendar.yml --dry-run
+nolendar sync --dry-run
 ```
 
 8. Run sync:
 
 ```bash
-nolendar sync --config nolendar.yml
+nolendar sync
 ```
 
 9. Augment today's Notion meeting pages with Markdown under any heading:
 
 ```bash
-nolendar augment --config nolendar.yml --input augment.md --heading "AI Preparation" --dry-run
-nolendar augment --config nolendar.yml --input augment.md --heading "AI Preparation"
+nolendar augment --input augment.md --heading "AI Preparation" --dry-run
+nolendar augment --input augment.md --heading "AI Preparation"
 ```
 
 The input file should put each meeting title on its own line, followed by the Markdown content to append to that meeting:
@@ -114,12 +114,12 @@ Design Review
 - Approve or reject the final layout direction.
 ```
 
-Matching is scoped to the selected day and uses the Notion meeting title after case and whitespace normalization. Use `--day YYYY-MM-DD` for a different day. Omit `--input` to read from stdin, for example `agent-command | nolendar augment --config nolendar.yml --heading "Follow-ups"`.
+Matching is scoped to the selected day and uses the Notion meeting title after case and whitespace normalization. Use `--day YYYY-MM-DD` for a different day. Omit `--input` to read from stdin, for example `agent-command | nolendar augment --heading "Follow-ups"`.
 
-If your generated input needs explicit meeting separators, set `notion.augmentation.delimiter` in `nolendar.yml` or pass `--delimiter <text>`. The CLI flag overrides the config value. The delimiter is matched as a full line after trimming whitespace; the first recognized meeting title after each delimiter becomes the section target:
+If your generated input needs explicit meeting separators, set `notion.augmentation.delimiter` in the config file or pass `--delimiter <text>`. The CLI flag overrides the config value. The delimiter is matched as a full line after trimming whitespace; the first recognized meeting title after each delimiter becomes the section target:
 
 ```bash
-nolendar augment --config nolendar.yml --input augment.md --heading "AI Preparation" --delimiter "%%MEETING%%"
+nolendar augment --input augment.md --heading "AI Preparation" --delimiter "%%MEETING%%"
 ```
 
 ```yaml
@@ -148,15 +148,37 @@ Detailed auth and credential setup lives in [AUTHENTICATION.md](/Users/rex/works
 
 ## Configuration
 
-Nolendar reads YAML config. By default, commands look for `nolendar.yml` in the current directory.
+Nolendar follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/) and does not discover application files from the current working directory:
 
-Nolendar also loads a local `.env` file from the current working directory before each CLI command. The file is ignored by git, so it is a good place for local credentials:
+- config: `$XDG_CONFIG_HOME/nolendar/config.yml` (default `~/.config/nolendar/config.yml`)
+- environment: `$XDG_CONFIG_HOME/nolendar/env` (default `~/.config/nolendar/env`)
+- Microsoft token cache: `$XDG_DATA_HOME/nolendar/msal-cache.json` (default `~/.local/share/nolendar/msal-cache.json`)
+- sync state: `$XDG_STATE_HOME/nolendar/state.json` (default `~/.local/state/nolendar/state.json`)
+
+Create the optional environment file for local credentials with:
 
 ```bash
-cp .env.example .env
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/nolendar"
+cp .env.example "${XDG_CONFIG_HOME:-$HOME/.config}/nolendar/env"
 ```
 
-Shell-exported variables take precedence over values in `.env`.
+Shell-exported variables take precedence over values in the environment file. `--config <path>`, `sync.statePath`, and `MICROSOFT_TOKEN_CACHE_PATH` remain explicit overrides.
+
+### Migrating a legacy installation
+
+From the checkout or installation directory that contains the old `nolendar.yml`, `.env`, and `.nolendar/`, preview the migration:
+
+```bash
+bin/migrate-to-xdg --dry-run
+```
+
+Then copy the legacy files into their XDG locations:
+
+```bash
+bin/migrate-to-xdg
+```
+
+Use `--legacy-dir PATH` when invoking the script from another directory. The script removes only the generated legacy `sync.statePath: .nolendar/state.json` setting from the copied config, applies private file permissions, refuses to overwrite conflicting destinations, and leaves every source file in place for rollback. It is safe to run again after a successful migration.
 
 Example:
 
@@ -230,7 +252,6 @@ mapping:
 
 sync:
   lookahead: today
-  statePath: ./.nolendar/state.json
 ```
 
 ### Config Notes
@@ -242,7 +263,7 @@ sync:
 - `calendars` must contain at least one calendar
 - `sync.lookahead` defaults to `today`
 - `sync.lookahead` also accepts relative ranges like `12h`, `5d`, `2w`, and `3m`
-- `sync.statePath` defaults to `.nolendar/state.json`, resolved relative to the config file
+- `sync.statePath` defaults to the XDG state file; an explicit relative value is resolved relative to the config file
 - `filters.ignoreNames` skips events whose title exactly matches one of the configured strings
 - `filters.ignorePatterns` skips events whose title matches one of the configured JavaScript regular expressions
 - `notion.peopleDataSource.maxAttendeesPerMeeting` defaults to `10`; set it lower to reduce Notion People lookups for large meetings, or `0` to skip participant relation association while still creating meeting pages

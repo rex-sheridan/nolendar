@@ -87,7 +87,7 @@ Recommended properties:
 
 ### Local Sync State
 
-Persist state in a local file, for example under `.nolendar/state.json`, keyed by calendar:
+Persist state in the XDG state file (`$XDG_STATE_HOME/nolendar/state.json`, default `~/.local/state/nolendar/state.json`), keyed by calendar:
 
 - Calendar identifier
 - Delta token or delta link
@@ -411,7 +411,7 @@ Status:
 
 Current scope:
 - `sync` now uses Microsoft Graph calendar-view delta queries
-- delta links are stored per calendar in `.nolendar/state.json`
+- delta links are stored per calendar in the XDG state file
 - stored delta links are only reused when the saved window matches the current resolved window exactly
 - removed/deleted delta events archive the matching Notion pages during sync
 

@@ -75,7 +75,6 @@ mapping:
 
 sync:
   lookahead: today
-  statePath: ./.nolendar/state.json
 `;
 
 export class InitConfigError extends Error {

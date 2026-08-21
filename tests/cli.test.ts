@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { Readable } from "node:stream";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -46,7 +49,7 @@ describe("cli", () => {
     expect(stderr.error).toHaveBeenCalledWith("`--tenant` must be one of: common, organizations, consumers.");
   });
 
-  it("uses nolendar.yml as Microsoft auth config for calendar discovery when present", async () => {
+  it("uses the XDG config file for calendar discovery when present", async () => {
     const stdout = { log: vi.fn() };
     const stderr = { error: vi.fn() };
     const loadConfigMock = vi.fn(async () => ({
@@ -57,11 +60,41 @@ describe("cli", () => {
       stdout,
       stderr,
       loadConfig: loadConfigMock as never,
+      env: { XDG_CONFIG_HOME: "/xdg/config" },
+      homeDir: "/home/rex",
+      pathExists: async () => true,
     });
 
     expect(exitCode).toBe(1);
-    expect(loadConfigMock).toHaveBeenCalledWith("nolendar.yml");
+    expect(loadConfigMock).toHaveBeenCalledWith("/xdg/config/nolendar/config.yml");
     expect(stderr.error).toHaveBeenCalledWith("`--tenant` must be one of: common, organizations, consumers.");
+  });
+
+  it("loads XDG config and environment files without consulting the current directory", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "nolendar-xdg-cli-"));
+    const xdgConfigHome = path.join(tempDir, "config");
+    const configDirectory = path.join(xdgConfigHome, "nolendar");
+    const env: NodeJS.ProcessEnv = { XDG_CONFIG_HOME: xdgConfigHome };
+    const loadConfigMock = vi.fn(async () => ({ source: "xdg" }));
+
+    try {
+      await mkdir(configDirectory, { recursive: true });
+      await writeFile(path.join(configDirectory, "env"), "NOLENDAR_XDG_TEST=loaded\n", "utf8");
+
+      const exitCode = await runCli(["node", "nolendar", "validate-config"], {
+        stdout: { log: vi.fn() },
+        stderr: { error: vi.fn() },
+        loadConfig: loadConfigMock as never,
+        env,
+        homeDir: path.join(tempDir, "home"),
+      });
+
+      expect(exitCode).toBe(0);
+      expect(env.NOLENDAR_XDG_TEST).toBe("loaded");
+      expect(loadConfigMock).toHaveBeenCalledWith(path.join(configDirectory, "config.yml"));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("returns a non-zero exit code for invalid calendar discovery auth modes", async () => {

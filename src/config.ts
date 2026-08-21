@@ -14,6 +14,7 @@ import type {
   NotionPageContentSection,
   RelativeWindow,
 } from "./domain/config.js";
+import { defaultStateFilePath } from "./xdg.js";
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -22,14 +23,23 @@ export class ConfigError extends Error {
   }
 }
 
-export async function loadConfig(configPath: string): Promise<NolendarConfig> {
+export async function loadConfig(
+  configPath: string,
+  env: NodeJS.ProcessEnv = process.env,
+  homeDir?: string,
+): Promise<NolendarConfig> {
   const raw = await readFile(configPath, "utf8");
   const parsed = parse(raw) as unknown;
 
-  return normalizeConfig(parsed, configPath);
+  return normalizeConfig(parsed, configPath, env, homeDir);
 }
 
-export function normalizeConfig(input: unknown, configPath = process.cwd()): NolendarConfig {
+export function normalizeConfig(
+  input: unknown,
+  configPath = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env,
+  homeDir?: string,
+): NolendarConfig {
   const record = asRecord(input, "Configuration file must contain a YAML object.");
   const notion = normalizeNotion(record.notion);
   const mapping = normalizeMapping(record.mapping);
@@ -50,7 +60,7 @@ export function normalizeConfig(input: unknown, configPath = process.cwd()): Nol
     mapping,
     sync: {
       lookahead,
-      statePath: normalizeStatePath(record.sync, configPath),
+      statePath: normalizeStatePath(record.sync, configPath, env, homeDir),
     },
   };
 }
@@ -221,12 +231,12 @@ function normalizeLookahead(value: unknown): LookaheadWindow {
   return lookahead;
 }
 
-function normalizeStatePath(value: unknown, configPath: string): string {
+function normalizeStatePath(value: unknown, configPath: string, env: NodeJS.ProcessEnv, homeDir?: string): string {
   const record = value === undefined ? {} : asRecord(value, "`sync` must be an object.");
   const statePath = optionalString(record.statePath, "`sync.statePath` must be a string.");
   const baseDir = path.dirname(configPath);
 
-  return path.resolve(baseDir, statePath ?? ".nolendar/state.json");
+  return statePath ? path.resolve(baseDir, statePath) : defaultStateFilePath(env, homeDir);
 }
 
 function asRecord(value: unknown, message: string): Record<string, unknown> {

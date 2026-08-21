@@ -12,6 +12,7 @@ import type {
   NolendarConfig,
   NotionPageContentSection,
 } from "./domain/config.js";
+import { defaultStateFilePath } from "./xdg.js";
 import type {
   NotionDataSourceSchema,
   NotionDataSourceSummary,
@@ -666,7 +667,7 @@ function defaultConfig(): NolendarConfig {
     },
     sync: {
       lookahead: "today",
-      statePath: ".nolendar/state.json",
+      statePath: defaultStateFilePath(),
     },
   };
 }

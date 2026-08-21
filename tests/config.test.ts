@@ -22,12 +22,28 @@ describe("normalizeConfig", () => {
     expect(config.microsoft.tenant).toBe("common");
     expect(config.microsoft.authMode).toBe("device_code");
     expect(config.sync.lookahead).toBe("today");
-    expect(config.sync.statePath).toBe(path.resolve("/tmp", ".nolendar/state.json"));
+    expect(config.sync.statePath).toBe(
+      path.join(process.env.XDG_STATE_HOME ?? path.join(process.env.HOME!, ".local/state"), "nolendar/state.json"),
+    );
     expect(config.mapping.eventId).toBe("Outlook Event ID");
     expect(config.filters.ignoreDeclined).toBe(true);
     expect(config.filters.ignoreNames).toEqual([]);
     expect(config.filters.ignorePatterns).toEqual([]);
     expect(config.notion.canceledMeetings).toEqual({ action: "archive" });
+  });
+
+  it("defaults sync state to XDG_STATE_HOME independently of the config location", () => {
+    const config = normalizeConfig(
+      {
+        notion: { databaseId: "db_123" },
+        calendars: [{ id: "primary" }],
+      },
+      "/different/current/directory/config.yml",
+      { XDG_STATE_HOME: "/xdg/state" },
+      "/home/rex",
+    );
+
+    expect(config.sync.statePath).toBe("/xdg/state/nolendar/state.json");
   });
 
   it("accepts status mapping for canceled meetings", () => {

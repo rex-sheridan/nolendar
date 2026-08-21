@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 
+import { defaultEnvFilePath } from "./xdg.js";
+
 export class EnvFileError extends Error {
   constructor(message: string) {
     super(message);
@@ -7,7 +9,10 @@ export class EnvFileError extends Error {
   }
 }
 
-export async function loadLocalEnvFile(envPath = ".env", env: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function loadLocalEnvFile(
+  envPath = defaultEnvFilePath(),
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
   let raw: string;
 
   try {

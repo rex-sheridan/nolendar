@@ -29,6 +29,8 @@ describe("writeDefaultConfig", () => {
     expect(contents).toContain("microsoft:");
     expect(contents).toContain("databaseId: your_notion_data_source_id");
     expect(contents).toContain("id: primary");
+    expect(contents).not.toContain(".nolendar");
+    expect(contents).not.toContain("statePath:");
   });
 
   it("fails if the config already exists without force", async () => {
