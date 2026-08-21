@@ -444,6 +444,11 @@ async function configureNotionOptional(
       PAGE_CONTENT_SECTIONS.map((section) => ({ label: section, value: section })),
       config.notion.pageContent?.sections ?? PAGE_CONTENT_SECTIONS,
     ),
+    insertAfterHeading: await optionalAnswer(
+      prompt,
+      "Insert generated content after template heading",
+      config.notion.pageContent?.insertAfterHeading,
+    ),
   };
   await save();
 

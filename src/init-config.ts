@@ -39,6 +39,8 @@ notion:
     type: emoji
     emoji: "📝"
   pageContent:
+    # Optional exact heading from the configured template.
+    # insertAfterHeading: Nolendar Content
     sections:
       - meeting_link
       - calendar_event

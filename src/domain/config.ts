@@ -51,6 +51,7 @@ export interface NotionDataSourceTemplateConfig {
 
 export interface NotionPageContentConfig {
   sections: NotionPageContentSection[];
+  insertAfterHeading?: string;
 }
 
 export type NotionPageContentSection =

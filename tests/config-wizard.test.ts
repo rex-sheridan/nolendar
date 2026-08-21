@@ -136,7 +136,7 @@ describe("runConfigWizard", () => {
           ["meeting_link", "calendar_event", "meeting_details", "notes", "action_items"],
         ],
         confirms: [false, true, false],
-        asks: ["", "meeting", ""],
+        asks: ["", "meeting", "", ""],
       }),
       stdout: { log: vi.fn() },
       listCalendars: async () => [

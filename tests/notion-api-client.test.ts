@@ -342,7 +342,7 @@ describe("ApiNotionClient page icon writes", () => {
     );
   });
 
-  it("finalizes native Notion template pages by appending generated meeting blocks once", async () => {
+  it("finalizes native Notion template pages after the configured heading", async () => {
     const timingReporter = {
       record: vi.fn(),
     };
@@ -350,7 +350,13 @@ describe("ApiNotionClient page icon writes", () => {
       children: {
         append: vi.fn(async () => undefined),
         list: vi.fn(async () => ({
-          results: [],
+          results: [
+            {
+              id: "nolendar-marker",
+              type: "heading_2",
+              heading_2: { rich_text: [{ plain_text: "Nolendar Content" }] },
+            },
+          ],
           has_more: false,
           next_cursor: null,
         })),
@@ -383,6 +389,10 @@ describe("ApiNotionClient page icon writes", () => {
         databaseId: "data-source-id",
         dataSourceTemplate: {
           type: "default",
+        },
+        pageContent: {
+          insertAfterHeading: "Nolendar Content",
+          sections: ["notes"],
         },
       },
       calendars: [],
@@ -434,6 +444,10 @@ describe("ApiNotionClient page icon writes", () => {
     expect(blocks.children.append).toHaveBeenCalledWith({
       block_id: "page-1",
       children: expect.any(Array),
+      position: {
+        type: "after_block",
+        after_block: { id: "nolendar-marker" },
+      },
     });
     expect(blocks.children.list).toHaveBeenCalledWith({
       block_id: "page-1",
@@ -444,7 +458,7 @@ describe("ApiNotionClient page icon writes", () => {
       expect.objectContaining({
         service: "notion",
         operation: "blocks.children.append",
-        detail: "block_id=page-1 children=4",
+        detail: "block_id=page-1 children=2",
       }),
     );
   });
@@ -880,7 +894,7 @@ describe("ApiNotionClient page icon writes", () => {
     );
   });
 
-  it("prepends configured template blocks when creating a meeting page", async () => {
+  it("splits copied template blocks around the configured insertion heading", async () => {
     const blocks = {
       children: {
         append: vi.fn(async () => undefined),
@@ -888,6 +902,13 @@ describe("ApiNotionClient page icon writes", () => {
           if (block_id === "template-page-id") {
             return {
               results: [
+                {
+                  id: "block-before",
+                  object: "block",
+                  type: "paragraph",
+                  has_children: false,
+                  paragraph: { rich_text: [{ type: "text", text: { content: "Before" } }] },
+                },
                 {
                   id: "block-1",
                   object: "block",
@@ -898,11 +919,18 @@ describe("ApiNotionClient page icon writes", () => {
                       {
                         type: "text",
                         text: {
-                          content: "Template Heading",
+                          content: "Nolendar Content",
                         },
                       },
                     ],
                   },
+                },
+                {
+                  id: "block-after",
+                  object: "block",
+                  type: "paragraph",
+                  has_children: false,
+                  paragraph: { rich_text: [{ type: "text", text: { content: "After" } }] },
                 },
               ],
               has_more: false,
@@ -919,7 +947,7 @@ describe("ApiNotionClient page icon writes", () => {
       },
     };
     const pages = {
-      create: vi.fn(async () => ({ id: "page-1" })),
+      create: vi.fn(async (_args: Record<string, unknown>) => ({ id: "page-1" })),
       update: vi.fn(async () => undefined),
     };
     const client = new ApiNotionClient("token", {
@@ -936,12 +964,16 @@ describe("ApiNotionClient page icon writes", () => {
       },
     });
 
-    await client.createMeetingPage({
+    const createArgs: Parameters<ApiNotionClient["createMeetingPage"]>[0] = {
       config: {
         microsoft: { tenant: "common", authMode: "device_code" },
         notion: {
           databaseId: "data-source-id",
           templatePageId: "template-page-id",
+          pageContent: {
+            insertAfterHeading: "Nolendar Content",
+            sections: ["notes"],
+          },
         },
         calendars: [],
         filters: {
@@ -981,31 +1013,29 @@ describe("ApiNotionClient page icon writes", () => {
         isCancelled: false,
         isRecurring: false,
       },
-    });
+    };
 
-    expect(pages.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        children: expect.arrayContaining([
-          expect.objectContaining({
-            type: "heading_1",
-            heading_1: expect.objectContaining({
-              rich_text: [
-                expect.objectContaining({
-                  text: expect.objectContaining({
-                    content: "Template Heading",
-                  }),
-                }),
-              ],
-            }),
-          }),
-        ]),
-      }),
-    );
+    await client.createMeetingPage(createArgs);
+
+    const createRequest = pages.create.mock.calls[0]?.[0] as { children: Array<{ type?: string }> };
+    expect(createRequest.children.map((child) => child.type)).toEqual([
+      "paragraph",
+      "heading_1",
+      "heading_2",
+      "paragraph",
+      "paragraph",
+    ]);
     expect(blocks.children.list).toHaveBeenCalledWith({
       block_id: "template-page-id",
       start_cursor: undefined,
       page_size: 100,
     });
+
+    createArgs.config.notion.pageContent!.insertAfterHeading = "Missing Heading";
+    await expect(client.createMeetingPage(createArgs)).rejects.toThrow(
+      'Configured notion.pageContent.insertAfterHeading "Missing Heading" was not found in the meeting template.',
+    );
+    expect(pages.create).toHaveBeenCalledTimes(1);
   });
 
   it("uses the default Notion data source template and defers generated meeting blocks until finalization", async () => {

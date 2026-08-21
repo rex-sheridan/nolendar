@@ -510,6 +510,10 @@ function normalizeNotionPageContent(value: unknown): NotionConfig["pageContent"]
 
   return {
     sections,
+    insertAfterHeading: optionalString(
+      record.insertAfterHeading,
+      "`notion.pageContent.insertAfterHeading` must be a non-empty string.",
+    ),
   };
 }
 

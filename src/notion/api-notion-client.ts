@@ -22,7 +22,11 @@ const NOTION_API_VERSION = "2026-03-11";
 interface NotionSdkClient {
   blocks: {
     children: {
-      append(args: { block_id: string; children: unknown[] }): Promise<unknown>;
+      append(args: {
+        block_id: string;
+        children: unknown[];
+        position?: { type: "after_block"; after_block: { id: string } };
+      }): Promise<unknown>;
       list(args: { block_id: string; start_cursor?: string; page_size?: number }): Promise<unknown>;
     };
   };
@@ -48,7 +52,7 @@ export class ApiNotionClient implements NotionClient {
   private readonly timingReporter?: ApiTimingReporter;
   private readonly defaultAssigneeCache = new Map<string, string | undefined>();
   private readonly participantPageCache = new Map<string, string>();
-  private readonly templateBlockCache = new Map<string, unknown[]>();
+  private readonly templateBlockCache = new Map<string, Array<Record<string, unknown>>>();
 
   constructor(authToken: string, client?: NotionSdkClient, timingReporter?: ApiTimingReporter) {
     this.client =
@@ -209,7 +213,7 @@ export class ApiNotionClient implements NotionClient {
     return resolvedUserId;
   }
 
-  async getTemplateBlocks(templatePageId: string): Promise<unknown[]> {
+  async getTemplateBlocks(templatePageId: string): Promise<Array<Record<string, unknown>>> {
     if (this.templateBlockCache.has(templatePageId)) {
       return this.templateBlockCache.get(templatePageId) ?? [];
     }
@@ -386,6 +390,13 @@ export class ApiNotionClient implements NotionClient {
       ? await this.getTemplateBlocks(args.config.notion.templatePageId)
       : [];
     const dataSourceTemplate = buildDataSourceTemplatePayload(args.config);
+    const children = dataSourceTemplate
+      ? undefined
+      : insertMeetingChildrenAfterHeading(
+          templateBlocks,
+          meetingChildren,
+          args.config.notion.pageContent?.insertAfterHeading,
+        );
     const response = (await this.timed(
       "pages.create",
       describeCreateMeetingPage(args.dataSource.id, dataSourceTemplate, templateBlocks.length, meetingChildren.length),
@@ -397,7 +408,7 @@ export class ApiNotionClient implements NotionClient {
         properties,
         icon: buildPageIcon(args.config),
         template: dataSourceTemplate,
-        children: dataSourceTemplate ? undefined : [...templateBlocks, ...meetingChildren],
+        children,
       }),
     )) as { id?: string };
     const pageId = response.id ?? "";
@@ -491,15 +502,24 @@ export class ApiNotionClient implements NotionClient {
     meeting: Meeting;
   }): Promise<"appended" | "marked_existing"> {
     const meetingChildren = buildMeetingChildren(args.config, args.meeting);
+    const pageChildren = await this.listBlockChildren(args.pageId);
 
-    if (await this.pageHasGeneratedMeetingContent(args.pageId, args.config, args.meeting)) {
+    if (this.pageHasGeneratedMeetingContent(pageChildren, args.config, args.meeting)) {
       return "marked_existing";
     }
+
+    const insertionBlockId = findInsertionBlockId(
+      pageChildren,
+      args.config.notion.pageContent?.insertAfterHeading,
+    );
 
     await this.timed("blocks.children.append", `block_id=${args.pageId} children=${meetingChildren.length}`, () =>
       this.client.blocks.children.append({
         block_id: args.pageId,
         children: meetingChildren,
+        ...(insertionBlockId
+          ? { position: { type: "after_block" as const, after_block: { id: insertionBlockId } } }
+          : {}),
       }),
     );
     return "appended";
@@ -803,8 +823,11 @@ export class ApiNotionClient implements NotionClient {
     return lines;
   }
 
-  private async pageHasGeneratedMeetingContent(pageId: string, config: NolendarConfig, meeting: Meeting): Promise<boolean> {
-    const children = await this.listBlockChildren(pageId);
+  private pageHasGeneratedMeetingContent(
+    children: Array<Record<string, unknown>>,
+    config: NolendarConfig,
+    meeting: Meeting,
+  ): boolean {
     const headings = new Set(
       children
         .map((child) => extractBlockHeading(child))
@@ -946,6 +969,49 @@ function extractBlockHeading(block: Record<string, unknown>): string | undefined
     .map((entry) => entry.plain_text ?? entry.text?.content ?? "")
     .join("")
     .trim() || undefined;
+}
+
+function insertMeetingChildrenAfterHeading(
+  templateBlocks: Array<Record<string, unknown>>,
+  meetingChildren: unknown[],
+  heading: string | undefined,
+): unknown[] {
+  if (!heading) {
+    return [...templateBlocks, ...meetingChildren];
+  }
+
+  const markerIndex = templateBlocks.findIndex((block) => extractBlockHeading(block) === heading);
+  if (markerIndex === -1) {
+    throw insertionHeadingNotFound(heading);
+  }
+
+  return [
+    ...templateBlocks.slice(0, markerIndex + 1),
+    ...meetingChildren,
+    ...templateBlocks.slice(markerIndex + 1),
+  ];
+}
+
+function findInsertionBlockId(
+  pageBlocks: Array<Record<string, unknown>>,
+  heading: string | undefined,
+): string | undefined {
+  if (!heading) {
+    return undefined;
+  }
+
+  const marker = pageBlocks.find((block) => extractBlockHeading(block) === heading);
+  if (!marker || typeof marker.id !== "string" || marker.id === "") {
+    throw insertionHeadingNotFound(heading);
+  }
+
+  return marker.id;
+}
+
+function insertionHeadingNotFound(heading: string): Error {
+  return new Error(
+    `Configured notion.pageContent.insertAfterHeading ${JSON.stringify(heading)} was not found in the meeting template.`,
+  );
 }
 
 function normalizeProperties(

@@ -238,6 +238,7 @@ describe("normalizeConfig", () => {
       notion: {
         databaseId: "db_123",
         pageContent: {
+          insertAfterHeading: "Nolendar Content",
           sections: ["meeting_link", "calendar_event", "meeting_details"],
         },
       },
@@ -249,8 +250,24 @@ describe("normalizeConfig", () => {
     });
 
     expect(config.notion.pageContent).toEqual({
+      insertAfterHeading: "Nolendar Content",
       sections: ["meeting_link", "calendar_event", "meeting_details"],
     });
+  });
+
+  it("rejects an empty generated content insertion heading", () => {
+    expect(() =>
+      normalizeConfig({
+        notion: {
+          databaseId: "db_123",
+          pageContent: {
+            insertAfterHeading: " ",
+            sections: ["notes"],
+          },
+        },
+        calendars: [{ id: "primary" }],
+      }),
+    ).toThrowError(new ConfigError("`notion.pageContent.insertAfterHeading` must be a non-empty string."));
   });
 
   it("accepts an emoji page icon", () => {
