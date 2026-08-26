@@ -56,6 +56,7 @@ export interface NotionClient {
     pageId: string;
     heading: string;
     content: string;
+    insertAfterHeading?: string;
   }): Promise<void>;
   finalizeMeetingPageContent(args: {
     pageId: string;

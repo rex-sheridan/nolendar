@@ -461,6 +461,7 @@ export class ApiNotionClient implements NotionClient {
     pageId: string;
     heading: string;
     content: string;
+    insertAfterHeading?: string;
   }): Promise<void> {
     const children = buildMarkdownBlocks(`## ${args.heading}\n\n${args.content}`);
 
@@ -468,10 +469,17 @@ export class ApiNotionClient implements NotionClient {
       return;
     }
 
+    const insertionBlockId = args.insertAfterHeading
+      ? findInsertionBlockId(await this.listBlockChildren(args.pageId), args.insertAfterHeading)
+      : undefined;
+
     await this.timed("blocks.children.append", `block_id=${args.pageId} children=${children.length}`, () =>
       this.client.blocks.children.append({
         block_id: args.pageId,
         children,
+        ...(insertionBlockId
+          ? { position: { type: "after_block" as const, after_block: { id: insertionBlockId } } }
+          : {}),
       }),
     );
   }

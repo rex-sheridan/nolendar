@@ -194,7 +194,16 @@ describe("importMeetingAugmentation", () => {
     ]);
 
     const result = await importMeetingAugmentation(
-      CONFIG,
+      {
+        ...CONFIG,
+        notion: {
+          ...CONFIG.notion,
+          pageContent: {
+            sections: ["notes"],
+            insertAfterHeading: "Nolendar Content",
+          },
+        },
+      },
       "Planning\nDecide launch scope.",
       {
         day: "2026-05-22",
@@ -218,6 +227,7 @@ describe("importMeetingAugmentation", () => {
       pageId: "page-1",
       heading: "Decisions",
       content: "Decide launch scope.",
+      insertAfterHeading: "Nolendar Content",
     });
     expect(result.matched).toEqual([
       {

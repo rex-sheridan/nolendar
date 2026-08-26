@@ -118,6 +118,9 @@ export async function importMeetingAugmentation(
         pageId: page.id,
         heading,
         content: section.content,
+        ...(config.notion.pageContent?.insertAfterHeading
+          ? { insertAfterHeading: config.notion.pageContent.insertAfterHeading }
+          : {}),
       });
     }
 

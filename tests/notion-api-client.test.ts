@@ -1471,4 +1471,57 @@ describe("ApiNotionClient.appendMarkdownToPage", () => {
       ],
     });
   });
+
+  it("inserts augmented markdown after the configured template heading", async () => {
+    const append = vi.fn(async () => undefined);
+    const list = vi.fn(async () => ({
+      results: [
+        {
+          id: "nolendar-marker",
+          type: "heading_2",
+          heading_2: { rich_text: [{ plain_text: "Nolendar Content" }] },
+        },
+      ],
+      has_more: false,
+      next_cursor: null,
+    }));
+    const client = new ApiNotionClient("token", {
+      blocks: { children: { append, list } },
+      dataSources: {
+        retrieve: vi.fn(),
+        update: vi.fn(),
+        query: vi.fn(),
+      },
+      pages: {
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      users: {
+        me: vi.fn(),
+        list: vi.fn(),
+      },
+    });
+
+    await client.appendMarkdownToPage({
+      pageId: "page-1",
+      heading: "Follow-ups",
+      content: "- Send summary",
+      insertAfterHeading: "Nolendar Content",
+    });
+
+    expect(list).toHaveBeenCalledWith({
+      block_id: "page-1",
+      start_cursor: undefined,
+      page_size: 100,
+    });
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        block_id: "page-1",
+        position: {
+          type: "after_block",
+          after_block: { id: "nolendar-marker" },
+        },
+      }),
+    );
+  });
 });

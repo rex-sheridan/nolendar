@@ -328,7 +328,8 @@ To place them within a template instead of after all template content, set
 `notion.pageContent.insertAfterHeading` to the exact text of a heading block.
 Nolendar keeps that marker heading, inserts its generated blocks immediately
 after it, and keeps the remaining template blocks below the generated content.
-If the configured heading is missing, sync fails with a clear error.
+The `augment` command uses the same marker when inserting imported Markdown.
+If the configured heading is missing, the operation fails with a clear error.
 
 If your template already contains `Notes` or `Action items`, configure only the metadata sections:
 
